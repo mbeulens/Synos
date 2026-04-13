@@ -1,39 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- Background -->
-  <rect width="128" height="128" rx="20" fill="#1a1a1a"/>
+  <!-- Green circle background -->
+  <circle cx="64" cy="64" r="62" fill="#22c55e"/>
 
-  <!-- Left speaker -->
-  <rect x="14" y="24" width="40" height="80" rx="6" fill="#2d2d2d" stroke="#444" stroke-width="1.5"/>
+  <!-- Left speaker body -->
+  <rect x="18" y="32" width="34" height="64" rx="5" fill="#1a1a1a"/>
   <!-- Woofer -->
-  <circle cx="34" cy="72" r="14" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="34" cy="72" r="8" fill="#333"/>
-  <circle cx="34" cy="72" r="3" fill="#555"/>
+  <circle cx="35" cy="68" r="12" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="35" cy="68" r="7" fill="#333"/>
+  <circle cx="35" cy="68" r="2.5" fill="#666"/>
   <!-- Tweeter -->
-  <circle cx="34" cy="44" r="7" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="34" cy="44" r="3" fill="#444"/>
+  <circle cx="35" cy="46" r="6" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="35" cy="46" r="2.5" fill="#555"/>
 
-  <!-- Right speaker -->
-  <rect x="74" y="24" width="40" height="80" rx="6" fill="#2d2d2d" stroke="#444" stroke-width="1.5"/>
+  <!-- Right speaker body -->
+  <rect x="76" y="32" width="34" height="64" rx="5" fill="#1a1a1a"/>
   <!-- Woofer -->
-  <circle cx="94" cy="72" r="14" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="94" cy="72" r="8" fill="#333"/>
-  <circle cx="94" cy="72" r="3" fill="#555"/>
+  <circle cx="93" cy="68" r="12" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="93" cy="68" r="7" fill="#333"/>
+  <circle cx="93" cy="68" r="2.5" fill="#666"/>
   <!-- Tweeter -->
-  <circle cx="94" cy="44" r="7" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="94" cy="44" r="3" fill="#444"/>
+  <circle cx="93" cy="46" r="6" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="93" cy="46" r="2.5" fill="#555"/>
 
-  <!-- Sound waves left -->
-  <path d="M10 55 Q2 64 10 73" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
-  <path d="M5 48 Q-6 64 5 80" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <!-- Sound waves left (outward) -->
+  <path d="M14 52 Q6 64 14 76" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M8 44 Q-3 64 8 84" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
 
-  <!-- Sound waves right -->
-  <path d="M118 55 Q126 64 118 73" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
-  <path d="M123 48 Q134 64 123 80" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <!-- Sound waves right (outward) -->
+  <path d="M114 52 Q122 64 114 76" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M120 44 Q131 64 120 84" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
 
-  <!-- Center boom lines -->
-  <path d="M58 50 L70 50" stroke="#facc15" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  <path d="M56 58 L72 58" stroke="#facc15" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
-  <path d="M54 66 L74 66" stroke="#f87171" stroke-width="3" stroke-linecap="round"/>
-  <path d="M56 74 L72 74" stroke="#facc15" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
-  <path d="M58 82 L70 82" stroke="#facc15" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <!-- Center blast lines -->
+  <path d="M56 48 L72 48" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <path d="M54 56 L74 56" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <path d="M53 64 L75 64" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M54 72 L74 72" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <path d="M56 80 L72 80" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
 </svg>
