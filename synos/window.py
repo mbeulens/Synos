@@ -9,6 +9,7 @@ from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 
 from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, get_transport_state
+from synos.streams import load_streams, add_stream, remove_stream
 
 
 CSS = """
@@ -357,54 +358,248 @@ class SynosWindow(Adw.ApplicationWindow):
 
         return box
 
-    # ── Right panel: Music Source ────────────────────────────────────
+    # ── Right panel: Music Browser ───────────────────────────────────
 
     def _build_source_panel(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         box.add_css_class("dark-panel")
-        box.set_size_request(180, -1)
+        box.set_size_request(200, -1)
 
-        title = Gtk.Label(label="Select a Music Source")
-        title.add_css_class("panel-title")
-        title.set_halign(Gtk.Align.START)
-        title.set_margin_top(12)
-        title.set_margin_start(12)
-        title.set_margin_bottom(12)
-        box.append(title)
+        # Title row with back and action buttons
+        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        title_box.set_margin_top(12)
+        title_box.set_margin_start(12)
+        title_box.set_margin_end(12)
+        title_box.set_margin_bottom(8)
 
-        sources = [
-            ("emblem-favorite-symbolic", "Sonos Favourites"),
+        self._browser_back_btn = Gtk.Button(icon_name="go-previous-symbolic")
+        self._browser_back_btn.add_css_class("flat")
+        self._browser_back_btn.set_tooltip_text("Back")
+        self._browser_back_btn.set_visible(False)
+        self._browser_back_btn.connect("clicked", self._on_browser_back)
+        title_box.append(self._browser_back_btn)
+
+        self._browser_title = Gtk.Label(label="MUSIC")
+        self._browser_title.add_css_class("panel-title")
+        self._browser_title.set_halign(Gtk.Align.START)
+        self._browser_title.set_hexpand(True)
+        title_box.append(self._browser_title)
+
+        self._browser_add_btn = Gtk.Button(icon_name="list-add-symbolic")
+        self._browser_add_btn.add_css_class("flat")
+        self._browser_add_btn.set_tooltip_text("Add")
+        self._browser_add_btn.set_visible(False)
+        self._browser_add_btn.connect("clicked", self._on_add_stream_clicked)
+        title_box.append(self._browser_add_btn)
+
+        box.append(title_box)
+
+        # Browsable list
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        self._browser_list = Gtk.ListBox()
+        self._browser_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._browser_list.add_css_class("navigation-sidebar")
+        scroll.set_child(self._browser_list)
+
+        box.append(scroll)
+
+        self._browser_view = "root"
+        self._show_browser_root()
+        return box
+
+    def _clear_browser_list(self):
+        while True:
+            row = self._browser_list.get_row_at_index(0)
+            if row is None:
+                break
+            self._browser_list.remove(row)
+
+    def _make_browser_row(self, icon_name, label_text, activatable=True):
+        row = Gtk.ListBoxRow()
+        row.set_activatable(activatable)
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row_box.set_margin_start(12)
+        row_box.set_margin_end(12)
+        row_box.set_margin_top(6)
+        row_box.set_margin_bottom(6)
+
+        icon = Gtk.Image(icon_name=icon_name)
+        icon.set_pixel_size(20)
+        row_box.append(icon)
+
+        label = Gtk.Label(label=label_text)
+        label.set_halign(Gtk.Align.START)
+        label.set_hexpand(True)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        row_box.append(label)
+
+        row.set_child(row_box)
+        return row
+
+    # ── Root view ────────────────────────────────────────────────────
+
+    def _show_browser_root(self):
+        self._clear_browser_list()
+        self._browser_view = "root"
+        self._browser_title.set_text("MUSIC")
+        self._browser_back_btn.set_visible(False)
+        self._browser_add_btn.set_visible(False)
+
+        # Disconnect previous handler if any
+        try:
+            self._browser_list.disconnect_by_func(self._on_root_activated)
+        except TypeError:
+            pass
+        try:
+            self._browser_list.disconnect_by_func(self._on_stream_activated)
+        except TypeError:
+            pass
+
+        folders = [
+            ("network-transmit-symbolic", "Streams"),
             ("folder-music-symbolic", "Music Library"),
-            ("view-list-symbolic", "Sonos Playlists"),
-            ("audio-input-line-symbolic", "Line-in"),
-            ("list-add-symbolic", "Add New Music Services"),
+            ("multimedia-player-symbolic", "Music Services"),
         ]
 
-        source_list = Gtk.ListBox()
-        source_list.set_selection_mode(Gtk.SelectionMode.NONE)
-        source_list.add_css_class("navigation-sidebar")
+        for icon_name, label_text in folders:
+            row = self._make_browser_row(icon_name, label_text)
+            # Add a right arrow to indicate it's a folder
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
+            self._browser_list.append(row)
 
-        for icon_name, label_text in sources:
+        self._browser_list.connect("row-activated", self._on_root_activated)
+
+    def _on_root_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx == 0:
+            self._show_streams_view()
+
+    # ── Streams view ─────────────────────────────────────────────────
+
+    def _show_streams_view(self):
+        self._clear_browser_list()
+        self._browser_view = "streams"
+        self._browser_title.set_text("STREAMS")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(True)
+
+        try:
+            self._browser_list.disconnect_by_func(self._on_root_activated)
+        except TypeError:
+            pass
+        try:
+            self._browser_list.disconnect_by_func(self._on_stream_activated)
+        except TypeError:
+            pass
+
+        self._streams = load_streams()
+
+        if not self._streams:
+            row = self._make_browser_row(
+                "list-add-symbolic", "No streams — click + to add", activatable=False
+            )
+            self._browser_list.append(row)
+            return
+
+        for i, stream in enumerate(self._streams):
             row = Gtk.ListBoxRow()
-            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             row_box.set_margin_start(12)
-            row_box.set_margin_end(12)
-            row_box.set_margin_top(6)
-            row_box.set_margin_bottom(6)
+            row_box.set_margin_end(4)
+            row_box.set_margin_top(5)
+            row_box.set_margin_bottom(5)
 
-            icon = Gtk.Image(icon_name=icon_name)
-            icon.set_pixel_size(20)
+            icon = Gtk.Image(icon_name="network-transmit-symbolic")
+            icon.set_pixel_size(16)
             row_box.append(icon)
 
-            label = Gtk.Label(label=label_text)
+            label = Gtk.Label(label=stream["name"])
             label.set_halign(Gtk.Align.START)
+            label.set_hexpand(True)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
             row_box.append(label)
 
-            row.set_child(row_box)
-            source_list.append(row)
+            remove_btn = Gtk.Button(icon_name="edit-delete-symbolic")
+            remove_btn.add_css_class("flat")
+            remove_btn.set_tooltip_text("Remove stream")
+            remove_btn.connect("clicked", self._on_remove_stream_clicked, i)
+            row_box.append(remove_btn)
 
-        box.append(source_list)
-        return box
+            row.set_child(row_box)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_stream_activated)
+
+    def _on_browser_back(self, _btn):
+        self._show_browser_root()
+
+    def _on_stream_activated(self, _listbox, row):
+        if not self._active_speaker:
+            return
+        idx = row.get_index()
+        if idx < len(self._streams):
+            stream = self._streams[idx]
+            self._url_entry.set_text(stream["url"])
+            try:
+                play_stream(self._active_speaker, stream["url"], title=stream["name"])
+            except Exception:
+                pass
+
+    def _on_add_stream_clicked(self, _btn):
+        dialog = Adw.AlertDialog(
+            heading="Add Stream",
+            body="Enter a name and URL for the stream.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("add", "Add")
+        dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        name_entry = Gtk.Entry()
+        name_entry.set_placeholder_text("Stream name")
+        content.append(name_entry)
+
+        url_entry = Gtk.Entry()
+        url_entry.set_placeholder_text("Stream URL (http://...)")
+        content.append(url_entry)
+
+        dialog.set_extra_child(content)
+        dialog.connect("response", self._on_add_stream_response, name_entry, url_entry)
+        dialog.present(self)
+
+    def _on_add_stream_response(self, dialog, response, name_entry, url_entry):
+        if response != "add":
+            return
+        name = name_entry.get_text().strip()
+        url = url_entry.get_text().strip()
+        if name and url:
+            add_stream(name, url)
+            self._show_streams_view()
+
+    def _on_remove_stream_clicked(self, _btn, index):
+        stream = self._streams[index]
+        dialog = Adw.AlertDialog(
+            heading="Remove Stream",
+            body=f'Remove "{stream["name"]}"?',
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("remove", "Remove")
+        dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._on_remove_stream_response, index)
+        dialog.present(self)
+
+    def _on_remove_stream_response(self, dialog, response, index):
+        if response == "remove":
+            remove_stream(index)
+            self._show_streams_view()
 
     # ── Discovery ────────────────────────────────────────────────────
 
