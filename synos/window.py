@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 
 import json
 import os
+import re
 import threading
 import webbrowser
 from urllib.parse import quote_plus
@@ -1092,7 +1093,9 @@ class SynosWindow(Adw.ApplicationWindow):
         artist = self._np_artist.get_text().strip()
         if not title or title in ("Nothing playing", "Stopped", "Unknown"):
             return
-        query = f"{artist} {title}".strip() if artist else title
+        # Strip parenthesized content like (Original Mix), (Remix), etc.
+        clean_title = re.sub(r"\s*\(.*?\)", "", title).strip()
+        query = f"{artist} {clean_title}".strip() if artist else clean_title
         url = f"https://www.discogs.com/search/?q={quote_plus(query)}&type=all"
         webbrowser.open(url)
 
