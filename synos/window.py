@@ -53,6 +53,13 @@ CSS = """
     min-width: 140px;
     min-height: 140px;
 }
+.console-view {
+    font-family: "Source Code Pro", "DejaVu Sans Mono", "Consolas", monospace;
+    font-size: 11px;
+}
+.console-header {
+    padding: 4px 8px;
+}
 """
 
 
@@ -163,6 +170,13 @@ class SynosWindow(Adw.ApplicationWindow):
         self._eq_btn.connect("clicked", self._on_eq_clicked)
         header.pack_end(self._eq_btn)
 
+        # Console toggle
+        self._console_btn = Gtk.Button(icon_name="utilities-terminal-symbolic")
+        self._console_btn.add_css_class("flat")
+        self._console_btn.set_tooltip_text("Toggle console log")
+        self._console_btn.connect("clicked", self._on_toggle_console)
+        header.pack_end(self._console_btn)
+
         # Theme toggle
         self._theme_btn = Gtk.Button()
         self._theme_btn.add_css_class("flat")
@@ -198,7 +212,20 @@ class SynosWindow(Adw.ApplicationWindow):
         paned_outer.set_position(180)
         paned_inner.set_position(420)
 
-        toolbar_view.set_content(paned_outer)
+        # Vertical paned: main content on top, console on bottom
+        self._main_vpaned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
+        self._main_vpaned.set_start_child(paned_outer)
+        self._main_vpaned.set_shrink_start_child(False)
+
+        # Console pane
+        self._console_pane = self._build_console()
+        self._main_vpaned.set_end_child(self._console_pane)
+        self._main_vpaned.set_shrink_end_child(False)
+        self._main_vpaned.set_resize_end_child(False)
+        self._console_visible = False
+        self._console_pane.set_visible(False)
+
+        toolbar_view.set_content(self._main_vpaned)
 
     # ── Left panel: Rooms ────────────────────────────────────────────
 
@@ -603,10 +630,17 @@ class SynosWindow(Adw.ApplicationWindow):
             self._update_skip_buttons()
             speaker = self._active_speaker
             url, name = stream["url"], stream["name"]
-            threading.Thread(
-                target=lambda: play_stream(speaker, url, title=name),
-                daemon=True,
-            ).start()
+            self._console_log(f"Playing stream: {name}", "info")
+            self._console_log(f"  URL: {url}")
+
+            def _play_stream_bg():
+                try:
+                    play_stream(speaker, url, title=name)
+                    self._console_log(f"Stream started: {name}", "success")
+                except Exception as e:
+                    self._console_log(f"Stream error: {e}", "error")
+
+            threading.Thread(target=_play_stream_bg, daemon=True).start()
 
     def _on_add_stream_clicked(self, _btn):
         dialog = Adw.AlertDialog(
@@ -980,16 +1014,26 @@ class SynosWindow(Adw.ApplicationWindow):
         folders = load_library_folders()
         self._audio_server.set_dirs(folders)
         self._audio_server.start()
+        self._console_log(f"HTTP server started on {self._audio_server._host}:{self._audio_server._port}", "success")
+        if folders:
+            for f in folders:
+                self._console_log(f"  Library folder: {f}")
 
     # ── Discovery ────────────────────────────────────────────────────
 
     def _start_discovery(self):
         self._refresh_btn.set_sensitive(False)
+        self._console_log("Discovering Sonos speakers...", "info")
         discover_speakers(self._on_speakers_found)
 
     def _on_speakers_found(self, speakers):
         self._speakers = speakers
         self._refresh_btn.set_sensitive(True)
+        if speakers:
+            for s in speakers:
+                self._console_log(f"Found speaker: {s.player_name} ({s.ip_address})", "success")
+        else:
+            self._console_log("No Sonos speakers found", "error")
 
         # Clear the list
         while True:
@@ -1055,6 +1099,7 @@ class SynosWindow(Adw.ApplicationWindow):
         idx = row.get_index()
         if idx < len(self._speakers):
             self._active_speaker = self._speakers[idx]
+            self._console_log(f"Selected speaker: {self._active_speaker.player_name}", "info")
             self._set_controls_sensitive(True)
             self._volume_scale.set_value(self._active_speaker.volume)
             if self._active_speaker.mute:
@@ -1160,24 +1205,29 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _on_eq_bass_changed(self, scale):
         if self._active_speaker:
+            val = int(scale.get_value())
             try:
-                self._active_speaker.bass = int(scale.get_value())
-            except Exception:
-                pass
+                self._active_speaker.bass = val
+                self._console_log(f"EQ bass set to {val}")
+            except Exception as e:
+                self._console_log(f"EQ bass error: {e}", "error")
 
     def _on_eq_treble_changed(self, scale):
         if self._active_speaker:
+            val = int(scale.get_value())
             try:
-                self._active_speaker.treble = int(scale.get_value())
-            except Exception:
-                pass
+                self._active_speaker.treble = val
+                self._console_log(f"EQ treble set to {val}")
+            except Exception as e:
+                self._console_log(f"EQ treble error: {e}", "error")
 
     def _on_eq_loudness_changed(self, switch, state):
         if self._active_speaker:
             try:
                 self._active_speaker.loudness = state
-            except Exception:
-                pass
+                self._console_log(f"EQ loudness {'ON' if state else 'OFF'}")
+            except Exception as e:
+                self._console_log(f"EQ loudness error: {e}", "error")
         return False
 
     def _on_youtube_clicked(self, _btn):
@@ -1253,10 +1303,13 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _play_file_bg(self, speaker, track):
         """Background thread: send play command to Sonos."""
+        self._console_log(f"Playing: {track['title']}", "info")
+        self._console_log(f"  URL: {track['url']}")
         try:
             play_file(speaker, track["url"], title=track["title"])
-        except Exception:
-            pass
+            self._console_log(f"Playback started: {track['title']}", "success")
+        except Exception as e:
+            self._console_log(f"Playback error: {e}", "error")
 
     def _update_skip_buttons(self):
         """Update prev/next button sensitivity based on queue state."""
@@ -1298,8 +1351,9 @@ class SynosWindow(Adw.ApplicationWindow):
         time_str = f"{h}:{m:02d}:{s:02d}"
         try:
             self._active_speaker.seek(time_str)
-        except Exception:
-            pass
+            self._console_log(f"Seek to {time_str}")
+        except Exception as e:
+            self._console_log(f"Seek error: {e}", "error")
         return False
 
     def _on_volume_changed(self, scale):
@@ -1315,6 +1369,96 @@ class SynosWindow(Adw.ApplicationWindow):
         self._next_btn.set_sensitive(sensitive)
         self._volume_scale.set_sensitive(sensitive)
         self._eq_btn.set_sensitive(sensitive)
+
+    # ── Console log ──────────────────────────────────────────────────
+
+    def _build_console(self):
+        """Build the collapsible console log panel."""
+        import datetime
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        # Header row
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        header.add_css_class("console-header")
+
+        label = Gtk.Label(label="Console")
+        label.set_markup("<b>Console</b>")
+        label.set_halign(Gtk.Align.START)
+        label.set_hexpand(True)
+        header.append(label)
+
+        clear_btn = Gtk.Button(icon_name="edit-clear-symbolic")
+        clear_btn.add_css_class("flat")
+        clear_btn.set_tooltip_text("Clear console")
+        clear_btn.connect("clicked", self._on_clear_console)
+        header.append(clear_btn)
+
+        box.append(header)
+        box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+        # Text view
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+
+        self._console_buffer = Gtk.TextBuffer()
+        self._console_buffer.create_tag("timestamp", foreground="#888888")
+        self._console_buffer.create_tag("error", foreground="#ef2929")
+        self._console_buffer.create_tag("success", foreground="#8ae234")
+        self._console_buffer.create_tag("info", foreground="#729fcf")
+
+        self._console_view = Gtk.TextView(buffer=self._console_buffer)
+        self._console_view.set_editable(False)
+        self._console_view.set_cursor_visible(False)
+        self._console_view.set_monospace(True)
+        self._console_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self._console_view.add_css_class("console-view")
+
+        scroll.set_child(self._console_view)
+        box.append(scroll)
+
+        return box
+
+    def _on_toggle_console(self, *_args):
+        """Toggle console visibility."""
+        self._console_visible = not self._console_visible
+        if self._console_visible:
+            self._console_pane.set_visible(True)
+            # Set paned position to show ~200px console
+            height = self._main_vpaned.get_height()
+            if height > 200:
+                self._main_vpaned.set_position(height - 200)
+        else:
+            self._console_pane.set_visible(False)
+
+    def _on_clear_console(self, *_args):
+        """Clear the console buffer."""
+        self._console_buffer.set_text("")
+
+    def _console_log(self, message, tag=None):
+        """Add a timestamped log entry to the console. Thread-safe."""
+        import datetime
+
+        def _do_log():
+            ts = datetime.datetime.now().strftime("%H:%M:%S")
+            start = self._console_buffer.get_start_iter()
+            # Insert message
+            if tag:
+                self._console_buffer.insert_with_tags_by_name(start, f"{message}\n", tag)
+            else:
+                self._console_buffer.insert(start, f"{message}\n")
+            # Insert timestamp at the very beginning
+            start = self._console_buffer.get_start_iter()
+            self._console_buffer.insert_with_tags_by_name(start, f"[{ts}] ", "timestamp")
+            # Trim to 500 lines
+            if self._console_buffer.get_line_count() > 500:
+                trim_start = self._console_buffer.get_iter_at_line(500)
+                trim_end = self._console_buffer.get_end_iter()
+                self._console_buffer.delete(trim_start, trim_end)
+            return False
+
+        GLib.idle_add(_do_log)
 
     # ── Album art ────────────────────────────────────────────────────
 
@@ -1342,9 +1486,14 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _fetch_art_bg(self, artist, title, art_key):
         """Background thread: fetch album art and update UI."""
+        query = f"{artist} - {title}" if artist else title
+        self._console_log(f"Fetching album art: {query}", "info")
         image_data = fetch_album_art(artist, title)
         if image_data and self._current_art_key == art_key:
+            self._console_log(f"Album art found ({len(image_data)} bytes)", "success")
             GLib.idle_add(self._set_album_art_image, image_data)
+        elif not image_data:
+            self._console_log(f"No album art found for: {query}")
 
     # ── Now Playing polling ──────────────────────────────────────────
 
@@ -1417,6 +1566,7 @@ class SynosWindow(Adw.ApplicationWindow):
                     and self._queue.has_next):
                 next_track = self._queue.next()
                 if next_track:
+                    self._console_log(f"Auto-advancing to: {next_track['title']}", "info")
                     self._play_queue_track(next_track)
                     self._update_skip_buttons()
                     self._last_transport_state = "PLAYING"
