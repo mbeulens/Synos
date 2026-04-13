@@ -1395,6 +1395,12 @@ class SynosWindow(Adw.ApplicationWindow):
         clear_btn.connect("clicked", self._on_clear_console)
         header.append(clear_btn)
 
+        close_btn = Gtk.Button(icon_name="window-close-symbolic")
+        close_btn.add_css_class("flat")
+        close_btn.set_tooltip_text("Close console")
+        close_btn.connect("clicked", self._on_toggle_console)
+        header.append(close_btn)
+
         box.append(header)
         box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
