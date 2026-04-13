@@ -318,15 +318,27 @@ class SynosWindow(Adw.ApplicationWindow):
         self._np_album.set_ellipsize(Pango.EllipsizeMode.END)
         info_box.append(self._np_album)
 
-        # YouTube search button
+        # Search buttons
+        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        search_box.set_halign(Gtk.Align.START)
+
         self._yt_btn = Gtk.Button(icon_name="web-browser-symbolic")
         self._yt_btn.add_css_class("flat")
         self._yt_btn.add_css_class("circular")
         self._yt_btn.set_tooltip_text("Search on YouTube")
-        self._yt_btn.set_halign(Gtk.Align.START)
         self._yt_btn.set_visible(False)
         self._yt_btn.connect("clicked", self._on_youtube_clicked)
-        info_box.append(self._yt_btn)
+        search_box.append(self._yt_btn)
+
+        self._discogs_btn = Gtk.Button(icon_name="media-optical-symbolic")
+        self._discogs_btn.add_css_class("flat")
+        self._discogs_btn.add_css_class("circular")
+        self._discogs_btn.set_tooltip_text("Search on Discogs")
+        self._discogs_btn.set_visible(False)
+        self._discogs_btn.connect("clicked", self._on_discogs_clicked)
+        search_box.append(self._discogs_btn)
+
+        info_box.append(search_box)
 
         content.append(info_box)
         box.append(content)
@@ -1074,6 +1086,16 @@ class SynosWindow(Adw.ApplicationWindow):
         url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
         webbrowser.open(url)
 
+    def _on_discogs_clicked(self, _btn):
+        """Open Discogs search for the current track."""
+        title = self._np_title.get_text().strip()
+        artist = self._np_artist.get_text().strip()
+        if not title or title in ("Nothing playing", "Stopped", "Unknown"):
+            return
+        query = f"{artist} {title}".strip() if artist else title
+        url = f"https://www.discogs.com/search/?q={quote_plus(query)}&type=all"
+        webbrowser.open(url)
+
     def _on_mute_clicked(self, _btn):
         if not self._active_speaker:
             return
@@ -1272,6 +1294,7 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._np_album.set_text("")
                 self._room_now_playing.set_text("")
                 self._yt_btn.set_visible(False)
+                self._discogs_btn.set_visible(False)
                 self._seek_scale.set_sensitive(False)
                 self._seek_scale.set_range(0, 1)
                 self._set_seek_value(0)
@@ -1286,7 +1309,9 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._np_title.set_text(display_title or "Unknown")
                 self._np_artist.set_text(artist)
                 self._np_album.set_text(album)
-                self._yt_btn.set_visible(bool(display_title and display_title != "Unknown"))
+                has_track = bool(display_title and display_title != "Unknown")
+                self._yt_btn.set_visible(has_track)
+                self._discogs_btn.set_visible(has_track)
                 if display_title:
                     self._room_now_playing.set_text(f"  {display_title}")
 
