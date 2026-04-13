@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" fill="#1a1a1a"/>
+
+  <!-- Left speaker -->
+  <rect x="14" y="24" width="40" height="80" rx="6" fill="#2d2d2d" stroke="#444" stroke-width="1.5"/>
+  <!-- Woofer -->
+  <circle cx="34" cy="72" r="14" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="34" cy="72" r="8" fill="#333"/>
+  <circle cx="34" cy="72" r="3" fill="#555"/>
+  <!-- Tweeter -->
+  <circle cx="34" cy="44" r="7" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="34" cy="44" r="3" fill="#444"/>
+
+  <!-- Right speaker -->
+  <rect x="74" y="24" width="40" height="80" rx="6" fill="#2d2d2d" stroke="#444" stroke-width="1.5"/>
+  <!-- Woofer -->
+  <circle cx="94" cy="72" r="14" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="94" cy="72" r="8" fill="#333"/>
+  <circle cx="94" cy="72" r="3" fill="#555"/>
+  <!-- Tweeter -->
+  <circle cx="94" cy="44" r="7" fill="#1a1a1a" stroke="#555" stroke-width="1.5"/>
+  <circle cx="94" cy="44" r="3" fill="#444"/>
+
+  <!-- Sound waves left -->
+  <path d="M10 55 Q2 64 10 73" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <path d="M5 48 Q-6 64 5 80" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Sound waves right -->
+  <path d="M118 55 Q126 64 118 73" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <path d="M123 48 Q134 64 123 80" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Center boom lines -->
+  <path d="M58 50 L70 50" stroke="#facc15" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M56 58 L72 58" stroke="#facc15" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M54 66 L74 66" stroke="#f87171" stroke-width="3" stroke-linecap="round"/>
+  <path d="M56 74 L72 74" stroke="#facc15" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M58 82 L70 82" stroke="#facc15" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+</svg>
