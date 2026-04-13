@@ -138,6 +138,19 @@ class SynosWindow(Adw.ApplicationWindow):
         transport_box.append(self._next_btn)
         header.pack_start(transport_box)
 
+        # Theme toggle (left side, after transport)
+        self._theme_btn = Gtk.Button()
+        self._theme_btn.add_css_class("flat")
+        self._theme_btn.connect("clicked", self._on_theme_toggled)
+        header.pack_start(self._theme_btn)
+
+        # Console toggle (left side, after theme)
+        self._console_btn = Gtk.Button(icon_name="utilities-terminal-symbolic")
+        self._console_btn.add_css_class("flat")
+        self._console_btn.set_tooltip_text("Toggle console log")
+        self._console_btn.connect("clicked", self._on_toggle_console)
+        header.pack_start(self._console_btn)
+
         # Volume in headerbar right side
         vol_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self._mute_btn = Gtk.Button(icon_name="audio-volume-high-symbolic")
@@ -170,19 +183,7 @@ class SynosWindow(Adw.ApplicationWindow):
         self._eq_btn.connect("clicked", self._on_eq_clicked)
         header.pack_end(self._eq_btn)
 
-        # Console toggle
-        self._console_btn = Gtk.Button(icon_name="utilities-terminal-symbolic")
-        self._console_btn.add_css_class("flat")
-        self._console_btn.set_tooltip_text("Toggle console log")
-        self._console_btn.connect("clicked", self._on_toggle_console)
-        header.pack_end(self._console_btn)
-
-        # Theme toggle
-        self._theme_btn = Gtk.Button()
-        self._theme_btn.add_css_class("flat")
-        self._theme_btn.connect("clicked", self._on_theme_toggled)
         self._update_theme_icon()
-        header.pack_end(self._theme_btn)
 
         toolbar_view.add_top_bar(header)
 
