@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 
 import json
 import os
+import threading
 
 from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 
@@ -573,10 +574,12 @@ class SynosWindow(Adw.ApplicationWindow):
             self._seek_duration_label.set_text("")
             self._seek_scale.set_sensitive(False)
             self._update_skip_buttons()
-            try:
-                play_stream(self._active_speaker, stream["url"], title=stream["name"])
-            except Exception:
-                pass
+            speaker = self._active_speaker
+            url, name = stream["url"], stream["name"]
+            threading.Thread(
+                target=lambda: play_stream(speaker, url, title=name),
+                daemon=True,
+            ).start()
 
     def _on_add_stream_clicked(self, _btn):
         dialog = Adw.AlertDialog(
@@ -1100,8 +1103,16 @@ class SynosWindow(Adw.ApplicationWindow):
         self._np_title.set_text(track["title"])
         self._np_artist.set_text("")
         self._np_album.set_text("")
+        # Run playback call in background thread to avoid UI freeze
+        speaker = self._active_speaker
+        threading.Thread(
+            target=self._play_file_bg, args=(speaker, track), daemon=True
+        ).start()
+
+    def _play_file_bg(self, speaker, track):
+        """Background thread: send play command to Sonos."""
         try:
-            play_file(self._active_speaker, track["url"], title=track["title"])
+            play_file(speaker, track["url"], title=track["title"])
         except Exception:
             pass
 
