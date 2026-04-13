@@ -72,14 +72,6 @@ CSS = """
 .volume-scale trough {
     min-height: 4px;
 }
-.stream-entry {
-    background-color: #333333;
-    color: #e0e0e0;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    padding: 4px 8px;
-    min-height: 28px;
-}
 """
 
 
@@ -334,28 +326,6 @@ class SynosWindow(Adw.ApplicationWindow):
         content.append(info_box)
         box.append(content)
 
-        # Stream URL entry at bottom
-        stream_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        stream_box.set_margin_start(16)
-        stream_box.set_margin_end(16)
-        stream_box.set_margin_bottom(12)
-        stream_box.set_margin_top(12)
-        stream_box.set_valign(Gtk.Align.END)
-        stream_box.set_vexpand(True)
-
-        stream_label = Gtk.Label(label="STREAM URL")
-        stream_label.add_css_class("panel-title")
-        stream_label.set_halign(Gtk.Align.START)
-        stream_box.append(stream_label)
-
-        self._url_entry = Gtk.Entry()
-        self._url_entry.set_text("http://prem2.di.fm:80/harddance?10108cc80386cf2a496dbad2")
-        self._url_entry.add_css_class("stream-entry")
-        self._url_entry.set_placeholder_text("Enter stream URL...")
-        stream_box.append(self._url_entry)
-
-        box.append(stream_box)
-
         return box
 
     # ── Right panel: Music Browser ───────────────────────────────────
@@ -544,7 +514,6 @@ class SynosWindow(Adw.ApplicationWindow):
         idx = row.get_index()
         if idx < len(self._streams):
             stream = self._streams[idx]
-            self._url_entry.set_text(stream["url"])
             try:
                 play_stream(self._active_speaker, stream["url"], title=stream["name"])
             except Exception:
@@ -690,11 +659,8 @@ class SynosWindow(Adw.ApplicationWindow):
     def _on_play_clicked(self, _btn):
         if not self._active_speaker:
             return
-        url = self._url_entry.get_text().strip()
-        if not url:
-            return
         try:
-            play_stream(self._active_speaker, url, title="Synos Stream")
+            self._active_speaker.play()
         except Exception:
             pass
 
