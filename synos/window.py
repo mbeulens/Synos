@@ -18,7 +18,7 @@ from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, play_file, get_transport_state
 from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
 from synos.vumeter import VuMeter
-from synos.albumart import fetch_album_art
+from synos.albumart import fetch_album_art, set_log_callback as set_art_log
 from synos.playqueue import PlayQueue
 from synos.httpserver import AudioServer
 from synos.library import (
@@ -220,6 +220,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
         # Console pane
         self._console_pane = self._build_console()
+        set_art_log(self._console_log)
         self._main_vpaned.set_end_child(self._console_pane)
         self._main_vpaned.set_shrink_end_child(False)
         self._main_vpaned.set_resize_end_child(False)
@@ -1493,14 +1494,9 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _fetch_art_bg(self, artist, title, art_key):
         """Background thread: fetch album art and update UI."""
-        query = f"{artist} - {title}" if artist else title
-        self._console_log(f"Fetching album art: {query}", "info")
         image_data = fetch_album_art(artist, title)
         if image_data and self._current_art_key == art_key:
-            self._console_log(f"Album art found ({len(image_data)} bytes)", "success")
             GLib.idle_add(self._set_album_art_image, image_data)
-        elif not image_data:
-            self._console_log(f"No album art found for: {query}")
 
     # ── Now Playing polling ──────────────────────────────────────────
 
