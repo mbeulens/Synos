@@ -5,72 +5,42 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
+import json
+import os
+
 from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 
 from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, get_transport_state
-from synos.streams import load_streams, add_stream, remove_stream
+from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
 
 
 CSS = """
-.dark-panel {
-    background-color: #1a1a1a;
-    color: #e0e0e0;
+.side-panel {
+    background-color: alpha(@window_fg_color, 0.04);
 }
 .center-panel {
-    background-color: #2a2a2a;
-    color: #e0e0e0;
+    background-color: alpha(@window_fg_color, 0.02);
 }
 .panel-title {
     font-size: 11px;
     font-weight: bold;
-    color: #999999;
+    opacity: 0.55;
     letter-spacing: 1px;
 }
 .now-playing-title {
     font-size: 13px;
     font-weight: bold;
-    color: #ffffff;
 }
 .now-playing-detail {
     font-size: 11px;
-    color: #999999;
-}
-.room-row {
-    padding: 8px 12px;
-    border-bottom: 1px solid #333333;
-}
-.room-row:selected {
-    background-color: #444444;
-}
-.room-row-playing {
-    color: #ffffff;
-}
-.source-row {
-    padding: 6px 8px;
-}
-.source-row:hover {
-    background-color: #333333;
+    opacity: 0.55;
 }
 .disc-art {
-    background-color: #111111;
+    background-color: alpha(@window_fg_color, 0.08);
     border-radius: 999px;
     min-width: 140px;
     min-height: 140px;
-}
-.transport-btn {
-    min-width: 40px;
-    min-height: 40px;
-    border-radius: 4px;
-    background-color: #444444;
-    color: #ffffff;
-    border: none;
-}
-.transport-btn:hover {
-    background-color: #555555;
-}
-.volume-scale trough {
-    min-height: 4px;
 }
 """
 
@@ -103,10 +73,8 @@ class SynosWindow(Adw.ApplicationWindow):
     # ── UI construction ──────────────────────────────────────────────
 
     def _build_ui(self):
-        # Force dark theme
-        self.get_application().get_style_manager().set_color_scheme(
-            Adw.ColorScheme.FORCE_DARK
-        )
+        self._style_manager = self.get_application().get_style_manager()
+        self._load_theme_preference()
 
         toolbar_view = Adw.ToolbarView()
         self.set_content(toolbar_view)
@@ -169,6 +137,14 @@ class SynosWindow(Adw.ApplicationWindow):
         vol_box.append(self._volume_label)
 
         header.pack_end(vol_box)
+
+        # Theme toggle
+        self._theme_btn = Gtk.Button()
+        self._theme_btn.add_css_class("flat")
+        self._theme_btn.connect("clicked", self._on_theme_toggled)
+        self._update_theme_icon()
+        header.pack_end(self._theme_btn)
+
         toolbar_view.add_top_bar(header)
 
         # ── Three-panel layout ───────────────────────────────────────
@@ -203,7 +179,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _build_rooms_panel(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        box.add_css_class("dark-panel")
+        box.add_css_class("side-panel")
         box.set_size_request(160, -1)
 
         # Title
@@ -332,7 +308,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _build_source_panel(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        box.add_css_class("dark-panel")
+        box.add_css_class("side-panel")
         box.set_size_request(200, -1)
 
         # Title row with back and action buttons
@@ -569,6 +545,55 @@ class SynosWindow(Adw.ApplicationWindow):
         if response == "remove":
             remove_stream(index)
             self._show_streams_view()
+
+    # ── Theme ────────────────────────────────────────────────────────
+
+    def _load_theme_preference(self):
+        prefs_file = os.path.join(CONFIG_DIR, "preferences.json")
+        dark = True  # default to dark
+        if os.path.exists(prefs_file):
+            try:
+                with open(prefs_file, "r") as f:
+                    prefs = json.load(f)
+                    dark = prefs.get("dark_mode", True)
+            except (json.JSONDecodeError, OSError):
+                pass
+        self._dark_mode = dark
+        self._apply_theme()
+
+    def _save_theme_preference(self):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        prefs_file = os.path.join(CONFIG_DIR, "preferences.json")
+        prefs = {}
+        if os.path.exists(prefs_file):
+            try:
+                with open(prefs_file, "r") as f:
+                    prefs = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        prefs["dark_mode"] = self._dark_mode
+        with open(prefs_file, "w") as f:
+            json.dump(prefs, f, indent=2)
+
+    def _apply_theme(self):
+        if self._dark_mode:
+            self._style_manager.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        else:
+            self._style_manager.set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
+
+    def _update_theme_icon(self):
+        if self._dark_mode:
+            self._theme_btn.set_icon_name("weather-clear-symbolic")
+            self._theme_btn.set_tooltip_text("Switch to light mode")
+        else:
+            self._theme_btn.set_icon_name("weather-clear-night-symbolic")
+            self._theme_btn.set_tooltip_text("Switch to dark mode")
+
+    def _on_theme_toggled(self, _btn):
+        self._dark_mode = not self._dark_mode
+        self._apply_theme()
+        self._update_theme_icon()
+        self._save_theme_preference()
 
     # ── Discovery ────────────────────────────────────────────────────
 
