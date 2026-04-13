@@ -252,8 +252,17 @@ class SynosWindow(Adw.ApplicationWindow):
         title.set_halign(Gtk.Align.START)
         title.set_margin_top(12)
         title.set_margin_start(16)
-        title.set_margin_bottom(16)
+        title.set_margin_bottom(2)
         box.append(title)
+
+        # Stream/channel name
+        self._np_stream_name = Gtk.Label(label="")
+        self._np_stream_name.set_halign(Gtk.Align.START)
+        self._np_stream_name.set_margin_start(16)
+        self._np_stream_name.set_margin_bottom(12)
+        self._np_stream_name.add_css_class("now-playing-detail")
+        self._np_stream_name.set_ellipsize(Pango.EllipsizeMode.END)
+        box.append(self._np_stream_name)
 
         # Content area
         content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
@@ -744,6 +753,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _poll_track_info(self):
         if not self._active_speaker:
+            self._np_stream_name.set_text("")
             self._np_title.set_text("Nothing playing")
             self._np_artist.set_text("")
             self._np_album.set_text("")
@@ -753,20 +763,24 @@ class SynosWindow(Adw.ApplicationWindow):
 
         try:
             track = self._active_speaker.get_current_track_info()
+            media = self._active_speaker.get_current_media_info()
             state = get_transport_state(self._active_speaker)
 
             title = track.get("title", "").strip()
             artist = track.get("artist", "").strip()
             album = track.get("album", "").strip()
             position = track.get("position", "")
+            channel = media.get("channel", "").strip()
 
             if state == "STOPPED":
+                self._np_stream_name.set_text("")
                 self._np_title.set_text("Stopped")
                 self._np_artist.set_text("")
                 self._np_album.set_text("")
                 self._np_position.set_text("")
                 self._room_now_playing.set_text("")
             else:
+                self._np_stream_name.set_text(channel)
                 self._np_title.set_text(title or "Unknown")
                 self._np_artist.set_text(artist)
                 self._np_album.set_text(album)
