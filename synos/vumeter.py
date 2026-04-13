@@ -9,19 +9,19 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gtk, GLib
 
-
 NUM_BARS = 32
 BAR_GAP = 2
 UPDATE_MS = 50
 
 
-class VuMeter(Gtk.Widget):
-    """Custom widget that draws an animated bar visualizer."""
+class VuMeter(Gtk.DrawingArea):
+    """Bar visualizer using DrawingArea with cairo."""
 
     def __init__(self):
         super().__init__()
+        self.set_content_width(200)
+        self.set_content_height(80)
         self.set_hexpand(True)
-        self.set_vexpand(True)
 
         self._playing = False
         self._tick_id = None
@@ -30,6 +30,8 @@ class VuMeter(Gtk.Widget):
         self._levels = [0.0] * NUM_BARS
         self._targets = [0.0] * NUM_BARS
         self._peaks = [0.0] * NUM_BARS
+
+        self.set_draw_func(self._on_draw)
 
     def set_playing(self, playing):
         if playing == self._playing:
@@ -96,15 +98,7 @@ class VuMeter(Gtk.Widget):
         self.queue_draw()
         return True
 
-    def do_measure(self, orientation, for_size):
-        if orientation == Gtk.Orientation.VERTICAL:
-            return 80, 120, -1, -1
-        else:
-            return 100, 300, -1, -1
-
-    def do_snapshot(self, snapshot):
-        width = self.get_width()
-        height = self.get_height()
+    def _on_draw(self, area, cr, width, height):
         if width <= 0 or height <= 0:
             return
 
@@ -130,20 +124,14 @@ class VuMeter(Gtk.Widget):
                 else:
                     r, g, b = 0.9, 0.2, 0.2
 
-                from graphene import Rect
-                from gi.repository import Gdk, Gsk
-
                 sy = height - (s + 1) * seg_height
-                rect = Rect.alloc()
-                rect.init(x, sy, bar_width, max(1, seg_height - 1))
-                color = Gdk.RGBA()
-                color.red, color.green, color.blue, color.alpha = r, g, b, 0.85
-                snapshot.append_color(color, rect)
+                cr.set_source_rgba(r, g, b, 0.85)
+                cr.rectangle(x, sy, bar_width, max(1, seg_height - 1))
+                cr.fill()
 
             # Peak indicator
             peak = self._peaks[i]
             if peak > 0.02:
-                from graphene import Rect as Rect2
                 py = height - peak * height
                 if peak < 0.5:
                     r, g, b = 0.3, 1.0, 0.5
@@ -151,8 +139,6 @@ class VuMeter(Gtk.Widget):
                     r, g, b = 1.0, 0.9, 0.3
                 else:
                     r, g, b = 1.0, 0.3, 0.3
-                rect = Rect2.alloc()
-                rect.init(x, py, bar_width, 2)
-                color = Gdk.RGBA()
-                color.red, color.green, color.blue, color.alpha = r, g, b, 1.0
-                snapshot.append_color(color, rect)
+                cr.set_source_rgba(r, g, b, 1.0)
+                cr.rectangle(x, py, bar_width, 2)
+                cr.fill()
