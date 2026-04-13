@@ -60,6 +60,7 @@ class SynosWindow(Adw.ApplicationWindow):
         self._speakers = []
         self._active_speaker = None
         self._poll_source_id = None
+        self._last_transport_state = None
         self._queue = PlayQueue()
         self._audio_server = AudioServer()
 
@@ -1118,6 +1119,19 @@ class SynosWindow(Adw.ApplicationWindow):
             channel = media.get("channel", "").strip()
 
             self._vu_meter.set_playing(state == "PLAYING")
+
+            # Auto-advance to next track when current one finishes
+            if (state == "STOPPED"
+                    and self._last_transport_state == "PLAYING"
+                    and self._queue.has_next):
+                next_track = self._queue.next()
+                if next_track:
+                    self._play_queue_track(next_track)
+                    self._update_skip_buttons()
+                    self._last_transport_state = "PLAYING"
+                    return True
+
+            self._last_transport_state = state
 
             if state == "STOPPED":
                 self._np_stream_name.set_text("")
