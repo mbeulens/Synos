@@ -154,6 +154,14 @@ class SynosWindow(Adw.ApplicationWindow):
 
         header.pack_end(vol_box)
 
+        # EQ button
+        self._eq_btn = Gtk.Button(icon_name="multimedia-equalizer-symbolic")
+        self._eq_btn.add_css_class("flat")
+        self._eq_btn.set_tooltip_text("Equalizer")
+        self._eq_btn.set_sensitive(False)
+        self._eq_btn.connect("clicked", self._on_eq_clicked)
+        header.pack_end(self._eq_btn)
+
         # Theme toggle
         self._theme_btn = Gtk.Button()
         self._theme_btn.add_css_class("flat")
@@ -1077,6 +1085,99 @@ class SynosWindow(Adw.ApplicationWindow):
         except Exception:
             pass
 
+    def _on_eq_clicked(self, _btn):
+        """Show EQ settings dialog."""
+        if not self._active_speaker:
+            return
+
+        speaker = self._active_speaker
+
+        dialog = Adw.AlertDialog(heading="Equalizer")
+        dialog.add_response("close", "Close")
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content.set_margin_start(8)
+        content.set_margin_end(8)
+
+        # Bass slider
+        bass_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bass_label = Gtk.Label(label="Bass")
+        bass_label.set_width_chars(8)
+        bass_label.set_halign(Gtk.Align.START)
+        bass_box.append(bass_label)
+
+        bass_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -10, 10, 1)
+        bass_scale.set_hexpand(True)
+        bass_scale.set_draw_value(True)
+        try:
+            bass_scale.set_value(speaker.bass)
+        except Exception:
+            bass_scale.set_value(0)
+        bass_scale.connect("value-changed", self._on_eq_bass_changed)
+        bass_box.append(bass_scale)
+        content.append(bass_box)
+
+        # Treble slider
+        treble_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        treble_label = Gtk.Label(label="Treble")
+        treble_label.set_width_chars(8)
+        treble_label.set_halign(Gtk.Align.START)
+        treble_box.append(treble_label)
+
+        treble_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -10, 10, 1)
+        treble_scale.set_hexpand(True)
+        treble_scale.set_draw_value(True)
+        try:
+            treble_scale.set_value(speaker.treble)
+        except Exception:
+            treble_scale.set_value(0)
+        treble_scale.connect("value-changed", self._on_eq_treble_changed)
+        treble_box.append(treble_scale)
+        content.append(treble_box)
+
+        # Loudness toggle
+        loudness_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        loudness_label = Gtk.Label(label="Loudness")
+        loudness_label.set_width_chars(8)
+        loudness_label.set_halign(Gtk.Align.START)
+        loudness_label.set_hexpand(True)
+        loudness_box.append(loudness_label)
+
+        loudness_switch = Gtk.Switch()
+        loudness_switch.set_valign(Gtk.Align.CENTER)
+        try:
+            loudness_switch.set_active(speaker.loudness)
+        except Exception:
+            pass
+        loudness_switch.connect("state-set", self._on_eq_loudness_changed)
+        loudness_box.append(loudness_switch)
+        content.append(loudness_box)
+
+        dialog.set_extra_child(content)
+        dialog.present(self)
+
+    def _on_eq_bass_changed(self, scale):
+        if self._active_speaker:
+            try:
+                self._active_speaker.bass = int(scale.get_value())
+            except Exception:
+                pass
+
+    def _on_eq_treble_changed(self, scale):
+        if self._active_speaker:
+            try:
+                self._active_speaker.treble = int(scale.get_value())
+            except Exception:
+                pass
+
+    def _on_eq_loudness_changed(self, switch, state):
+        if self._active_speaker:
+            try:
+                self._active_speaker.loudness = state
+            except Exception:
+                pass
+        return False
+
     def _on_youtube_clicked(self, _btn):
         """Open YouTube search for the current track."""
         title = self._np_title.get_text().strip()
@@ -1211,6 +1312,7 @@ class SynosWindow(Adw.ApplicationWindow):
         self._prev_btn.set_sensitive(sensitive)
         self._next_btn.set_sensitive(sensitive)
         self._volume_scale.set_sensitive(sensitive)
+        self._eq_btn.set_sensitive(sensitive)
 
     # ── Now Playing polling ──────────────────────────────────────────
 
