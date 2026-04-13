@@ -315,13 +315,36 @@ class SynosWindow(Adw.ApplicationWindow):
         self._np_album.set_ellipsize(Pango.EllipsizeMode.END)
         info_box.append(self._np_album)
 
-        self._np_position = Gtk.Label(label="")
-        self._np_position.add_css_class("now-playing-detail")
-        self._np_position.set_halign(Gtk.Align.START)
-        info_box.append(self._np_position)
-
         content.append(info_box)
         box.append(content)
+
+        # Seek slider
+        seek_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        seek_box.set_margin_start(16)
+        seek_box.set_margin_end(16)
+        seek_box.set_margin_top(12)
+
+        self._seek_position_label = Gtk.Label(label="0:00")
+        self._seek_position_label.add_css_class("now-playing-detail")
+        self._seek_position_label.set_width_chars(5)
+        seek_box.append(self._seek_position_label)
+
+        self._seek_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 0, 1, 1
+        )
+        self._seek_scale.set_hexpand(True)
+        self._seek_scale.set_draw_value(False)
+        self._seek_scale.set_sensitive(False)
+        self._seeking = False
+        self._seek_scale.connect("change-value", self._on_seek_changed)
+        seek_box.append(self._seek_scale)
+
+        self._seek_duration_label = Gtk.Label(label="0:00")
+        self._seek_duration_label.add_css_class("now-playing-detail")
+        self._seek_duration_label.set_width_chars(5)
+        seek_box.append(self._seek_duration_label)
+
+        box.append(seek_box)
 
         # Spacer
         spacer = Gtk.Box()
@@ -1071,6 +1094,21 @@ class SynosWindow(Adw.ApplicationWindow):
         self._prev_btn.set_sensitive(has_speaker and self._queue.has_prev)
         self._next_btn.set_sensitive(has_speaker and self._queue.has_next)
 
+    def _on_seek_changed(self, scale, scroll_type, value):
+        """User dragged the seek slider."""
+        if not self._active_speaker:
+            return False
+        seconds = max(0, int(value))
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        s = seconds % 60
+        time_str = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+        try:
+            self._active_speaker.seek(time_str)
+        except Exception:
+            pass
+        return False
+
     def _on_volume_changed(self, scale):
         vol = int(scale.get_value())
         self._volume_label.set_text(str(vol))
@@ -1097,6 +1135,31 @@ class SynosWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._poll_source_id)
             self._poll_source_id = None
 
+    @staticmethod
+    def _time_to_seconds(time_str):
+        """Convert 'H:MM:SS' or 'M:SS' to total seconds."""
+        parts = time_str.split(":")
+        try:
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            elif len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+        except ValueError:
+            pass
+        return 0
+
+    @staticmethod
+    def _format_time(seconds):
+        """Format seconds as M:SS or H:MM:SS."""
+        if seconds <= 0:
+            return "0:00"
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        s = seconds % 60
+        if h:
+            return f"{h}:{m:02d}:{s:02d}"
+        return f"{m}:{s:02d}"
+
     def _poll_track_info(self):
         if not self._active_speaker:
             self._np_stream_name.set_text("")
@@ -1115,8 +1178,12 @@ class SynosWindow(Adw.ApplicationWindow):
             title = track.get("title", "").strip()
             artist = track.get("artist", "").strip()
             album = track.get("album", "").strip()
-            position = track.get("position", "")
+            position = track.get("position", "0:00:00")
+            duration = track.get("duration", "0:00:00")
             channel = media.get("channel", "").strip()
+
+            pos_secs = self._time_to_seconds(position)
+            dur_secs = self._time_to_seconds(duration)
 
             self._vu_meter.set_playing(state == "PLAYING")
 
@@ -1138,8 +1205,12 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._np_title.set_text("Stopped")
                 self._np_artist.set_text("")
                 self._np_album.set_text("")
-                self._np_position.set_text("")
                 self._room_now_playing.set_text("")
+                self._seek_scale.set_sensitive(False)
+                self._seek_scale.set_range(0, 1)
+                self._seek_scale.set_value(0)
+                self._seek_position_label.set_text("0:00")
+                self._seek_duration_label.set_text("0:00")
             else:
                 self._np_stream_name.set_text(channel)
                 # Fall back to queue track title if Sonos metadata is empty
@@ -1149,9 +1220,23 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._np_title.set_text(display_title or "Unknown")
                 self._np_artist.set_text(artist)
                 self._np_album.set_text(album)
-                self._np_position.set_text(position if position != "0:00:00" else "")
-                if title:
-                    self._room_now_playing.set_text(f"  {title}")
+                if display_title:
+                    self._room_now_playing.set_text(f"  {display_title}")
+
+                # Update seek slider
+                if dur_secs > 0:
+                    self._seek_scale.set_sensitive(True)
+                    self._seek_scale.set_range(0, dur_secs)
+                    self._seek_scale.set_value(pos_secs)
+                    self._seek_position_label.set_text(self._format_time(pos_secs))
+                    self._seek_duration_label.set_text(self._format_time(dur_secs))
+                else:
+                    # Stream — no seekable duration
+                    self._seek_scale.set_sensitive(False)
+                    self._seek_scale.set_range(0, 1)
+                    self._seek_scale.set_value(0)
+                    self._seek_position_label.set_text(self._format_time(pos_secs) if pos_secs else "")
+                    self._seek_duration_label.set_text("")
         except Exception:
             pass
 
