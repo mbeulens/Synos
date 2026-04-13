@@ -6,6 +6,7 @@ Results are cached to disk in ~/.config/synos/artcache/.
 
 import hashlib
 import os
+import re
 
 import requests
 
@@ -48,10 +49,42 @@ def _ensure_cache_dir():
     os.makedirs(_CACHE_DIR, exist_ok=True)
 
 
+def _clean_title_variants(artist, title):
+    """Generate up to 3 cleaned title variants for retry.
+
+    1. Original title as-is
+    2. Strip track numbers (e.g. "06 - ") and artist prefix (e.g. "Artist - ")
+    3. Also strip parenthesized content (e.g. "(Original Mix)")
+    """
+    variants = []
+
+    # Variant 1: original
+    variants.append(title)
+
+    # Variant 2: strip leading track number and artist prefix
+    cleaned = title
+    # Remove leading track numbers like "01 - ", "06 ", "12. ", "01-"
+    cleaned = re.sub(r"^\d{1,3}\s*[-.\)]\s*", "", cleaned)
+    # Remove artist prefix like "Artist - " or "Artist- "
+    if artist:
+        pattern = re.escape(artist) + r"\s*[-–]\s*"
+        cleaned = re.sub(pattern, "", cleaned, count=1, flags=re.IGNORECASE)
+    cleaned = cleaned.strip()
+    if cleaned and cleaned != title:
+        variants.append(cleaned)
+
+    # Variant 3: also strip parenthesized content
+    stripped = re.sub(r"\s*\(.*?\)", "", cleaned).strip()
+    if stripped and stripped not in variants:
+        variants.append(stripped)
+
+    return variants[:3]
+
+
 def fetch_album_art(artist, title):
     """Fetch album art for a given artist + title.
 
-    Returns image bytes (JPEG/PNG) or None if not found.
+    Tries up to 3 cleaned title variants. Returns image bytes or None.
     This is a blocking call — run in a background thread.
     """
     if not title:
@@ -71,7 +104,19 @@ def fetch_album_art(artist, title):
         return data
 
     _logmsg(f"Art cache miss, fetching: {artist} - {title}", "info")
-    image_data = _lookup(artist, title)
+
+    # Try cleaned title variants
+    variants = _clean_title_variants(artist, title)
+    image_data = None
+
+    for i, variant in enumerate(variants):
+        attempt = f"[attempt {i + 1}/{len(variants)}]"
+        _logmsg(f"  {attempt} title: \"{variant}\"", "info")
+        image_data = _lookup(artist, variant)
+        if image_data:
+            _logmsg(f"  {attempt} Found art!", "success")
+            break
+        _logmsg(f"  {attempt} No art found")
 
     # Write to disk cache
     _ensure_cache_dir()
@@ -81,7 +126,7 @@ def fetch_album_art(artist, title):
     if image_data:
         _logmsg(f"Art cached ({len(image_data)} bytes): {artist} - {title}", "success")
     else:
-        _logmsg(f"Art not found, cached negative: {artist} - {title}")
+        _logmsg(f"Art not found after {len(variants)} attempts, cached negative: {artist} - {title}")
 
     return image_data
 
