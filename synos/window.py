@@ -312,14 +312,16 @@ class SynosWindow(Adw.ApplicationWindow):
         content.append(info_box)
         box.append(content)
 
-        # VU Meter
+        # Spacer
+        spacer = Gtk.Box()
+        spacer.set_vexpand(True)
+        box.append(spacer)
+
+        # VU Meter — fixed height, pinned to bottom
         self._vu_meter = VuMeter()
         self._vu_meter.set_margin_start(16)
         self._vu_meter.set_margin_end(16)
-        self._vu_meter.set_margin_top(20)
         self._vu_meter.set_margin_bottom(12)
-        self._vu_meter.set_content_height(80)
-        self._vu_meter.set_vexpand(True)
         box.append(self._vu_meter)
 
         return box
