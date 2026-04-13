@@ -321,8 +321,9 @@ class SynosWindow(Adw.ApplicationWindow):
         # YouTube search button
         self._yt_btn = Gtk.Button(icon_name="web-browser-symbolic")
         self._yt_btn.add_css_class("flat")
+        self._yt_btn.add_css_class("circular")
         self._yt_btn.set_tooltip_text("Search on YouTube")
-        self._yt_btn.set_valign(Gtk.Align.CENTER)
+        self._yt_btn.set_halign(Gtk.Align.START)
         self._yt_btn.set_visible(False)
         self._yt_btn.connect("clicked", self._on_youtube_clicked)
         info_box.append(self._yt_btn)
