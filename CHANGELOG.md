@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0 — Minor release
+
+### New Features
+- **Equalizer** — Bass/treble sliders (-10 to +10) and loudness toggle, accessible from headerbar
+- **YouTube Search** — One-click search for current track on YouTube
+- **Discogs Search** — One-click search on Discogs (strips parenthesized content like "Original Mix")
+- **Screenshot** added to README
+
+### Bug Fixes
+- Fixed browser navigation: Streams folder no longer opens Music Library
+- Desktop launcher instructions added to README
+
 ## v1.0.0 — Major release
 
 ### Music Library

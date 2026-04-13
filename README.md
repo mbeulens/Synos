@@ -2,6 +2,8 @@
 
 A GTK4 + Libadwaita Sonos controller for Linux.
 
+![Synos Screenshot](screenshot.png)
+
 ## Features
 
 - **Speaker Discovery** — Automatically finds Sonos speakers on your network
@@ -11,7 +13,9 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 - **Play Queue** — Play single tracks or entire folders, with prev/next navigation
 - **Auto-Advance** — Automatically plays the next track when the current one finishes
 - **Seek Slider** — Draggable position slider for local files with duration display
+- **Equalizer** — Bass, treble, and loudness controls per speaker
 - **Now Playing** — Live track info with title, artist, and stream name
+- **YouTube / Discogs Search** — Search current track on YouTube or Discogs with one click
 - **VU Meter** — Animated 32-bar visualizer with peak hold
 - **Light/Dark Mode** — Toggle with persistent preference
 - **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
