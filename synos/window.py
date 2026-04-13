@@ -454,15 +454,7 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_back_btn.set_visible(False)
         self._browser_add_btn.set_visible(False)
 
-        # Disconnect previous handler if any
-        try:
-            self._browser_list.disconnect_by_func(self._on_root_activated)
-        except TypeError:
-            pass
-        try:
-            self._browser_list.disconnect_by_func(self._on_stream_activated)
-        except TypeError:
-            pass
+        self._disconnect_browser_signals()
 
         folders = [
             ("network-transmit-symbolic", "Streams"),
