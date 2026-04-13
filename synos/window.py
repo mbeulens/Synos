@@ -336,7 +336,13 @@ class SynosWindow(Adw.ApplicationWindow):
         self._seek_scale.set_draw_value(False)
         self._seek_scale.set_sensitive(False)
         self._seeking = False
-        self._seek_scale.connect("change-value", self._on_seek_changed)
+
+        # Track drag start/end to suppress polling during seek
+        click = Gtk.GestureClick()
+        click.connect("pressed", self._on_seek_pressed)
+        click.connect("released", self._on_seek_released)
+        self._seek_scale.add_controller(click)
+
         seek_box.append(self._seek_scale)
 
         self._seek_duration_label = Gtk.Label(label="0:00")
@@ -1094,20 +1100,24 @@ class SynosWindow(Adw.ApplicationWindow):
         self._prev_btn.set_sensitive(has_speaker and self._queue.has_prev)
         self._next_btn.set_sensitive(has_speaker and self._queue.has_next)
 
-    def _on_seek_changed(self, scale, scroll_type, value):
-        """User dragged the seek slider."""
+    def _on_seek_pressed(self, gesture, n_press, x, y):
+        """User started dragging the seek slider."""
+        self._seeking = True
+
+    def _on_seek_released(self, gesture, n_press, x, y):
+        """User released the seek slider — perform the seek."""
+        self._seeking = False
         if not self._active_speaker:
-            return False
-        seconds = max(0, int(value))
+            return
+        seconds = max(0, int(self._seek_scale.get_value()))
         h = seconds // 3600
         m = (seconds % 3600) // 60
         s = seconds % 60
-        time_str = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+        time_str = f"{h}:{m:02d}:{s:02d}"
         try:
             self._active_speaker.seek(time_str)
         except Exception:
             pass
-        return False
 
     def _on_volume_changed(self, scale):
         vol = int(scale.get_value())
@@ -1223,18 +1233,20 @@ class SynosWindow(Adw.ApplicationWindow):
                 if display_title:
                     self._room_now_playing.set_text(f"  {display_title}")
 
-                # Update seek slider
+                # Update seek slider (skip if user is dragging)
                 if dur_secs > 0:
                     self._seek_scale.set_sensitive(True)
                     self._seek_scale.set_range(0, dur_secs)
-                    self._seek_scale.set_value(pos_secs)
+                    if not self._seeking:
+                        self._seek_scale.set_value(pos_secs)
                     self._seek_position_label.set_text(self._format_time(pos_secs))
                     self._seek_duration_label.set_text(self._format_time(dur_secs))
                 else:
                     # Stream — no seekable duration
                     self._seek_scale.set_sensitive(False)
                     self._seek_scale.set_range(0, 1)
-                    self._seek_scale.set_value(0)
+                    if not self._seeking:
+                        self._seek_scale.set_value(0)
                     self._seek_position_label.set_text(self._format_time(pos_secs) if pos_secs else "")
                     self._seek_duration_label.set_text("")
         except Exception:
