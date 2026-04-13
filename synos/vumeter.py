@@ -20,7 +20,7 @@ class VuMeter(Gtk.DrawingArea):
     def __init__(self):
         super().__init__()
         self.set_content_width(200)
-        self.set_content_height(45)
+        self.set_content_height(100)
         self.set_hexpand(True)
 
         self._playing = False

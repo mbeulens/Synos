@@ -1,3 +1,3 @@
 """Synos - A GTK4 Sonos controller."""
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
