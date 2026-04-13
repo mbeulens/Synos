@@ -13,6 +13,7 @@ from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, get_transport_state
 from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
+from synos.vumeter import VuMeter
 
 
 CSS = """
@@ -310,6 +311,16 @@ class SynosWindow(Adw.ApplicationWindow):
 
         content.append(info_box)
         box.append(content)
+
+        # VU Meter
+        self._vu_meter = VuMeter()
+        self._vu_meter.set_margin_start(16)
+        self._vu_meter.set_margin_end(16)
+        self._vu_meter.set_margin_top(16)
+        self._vu_meter.set_margin_bottom(12)
+        self._vu_meter.set_valign(Gtk.Align.END)
+        self._vu_meter.set_vexpand(True)
+        box.append(self._vu_meter)
 
         return box
 
@@ -771,6 +782,8 @@ class SynosWindow(Adw.ApplicationWindow):
             album = track.get("album", "").strip()
             position = track.get("position", "")
             channel = media.get("channel", "").strip()
+
+            self._vu_meter.set_playing(state == "PLAYING")
 
             if state == "STOPPED":
                 self._np_stream_name.set_text("")
