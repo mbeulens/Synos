@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.0.0 — Major release
+
+### Music Library
+- Browse and play local audio files from configurable folders
+- Subfolder navigation with back button
+- Play single track or entire folder with "Play All"
+- Auto-advance to next track when current one finishes
+- Supported formats: mp3, flac, aac, ogg, wav, wma, m4a, opus
+- Local HTTP server serves files to Sonos speakers
+
+### Play Queue
+- Full queue management with prev/next navigation
+- Headerbar prev/next buttons wired to queue state
+- Queue built automatically from folder contents
+
+### Seek Slider
+- Draggable seek slider for local file playback
+- Shows current position and total duration
+- Debounced seeking — sends command after user stops dragging
+- Disabled for streams (no seekable duration)
+- Resets immediately when switching tracks
+
+### Performance
+- All playback calls run in background threads — no UI freezing
+- Responsive slider and controls even with large files
+
+### VU Meter
+- Refined random bar patterns (no more ocean wave effect)
+- Fixed height at 100px, pinned to bottom of center pane
+
+### Previous features (v0.3.0)
+- Three-panel layout: Rooms, Now Playing, Music Browser
+- Sonos speaker discovery via SSDP with auto-select
+- Stream playback with browsable Streams folder
+- Now Playing display with track title, artist, stream name
+- Animated VU meter visualizer
+- Light/Dark mode toggle with persistent preference
+- Transport controls, volume slider, mute/unmute
+- Desktop launcher
+
 ## v0.3.0 — Minor release
 
 ### Features

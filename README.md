@@ -6,11 +6,20 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 
 - **Speaker Discovery** — Automatically finds Sonos speakers on your network
 - **Stream Playback** — Play internet radio streams (Icecast, SHOUTcast, etc.)
+- **Music Library** — Browse and play local audio files from configurable folders
+- **Subfolder Navigation** — Drill into subdirectories with back button support
+- **Play Queue** — Play single tracks or entire folders, with prev/next navigation
+- **Auto-Advance** — Automatically plays the next track when the current one finishes
+- **Seek Slider** — Draggable position slider for local files with duration display
 - **Now Playing** — Live track info with title, artist, and stream name
 - **VU Meter** — Animated 32-bar visualizer with peak hold
-- **Music Browser** — Manage saved streams with add/remove/play
 - **Light/Dark Mode** — Toggle with persistent preference
-- **Transport Controls** — Play, pause, volume, mute from the headerbar
+- **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
+- **Non-blocking UI** — All playback calls run in background threads
+
+## Supported Audio Formats
+
+mp3, flac, aac, ogg, wav, wma, m4a, opus
 
 ## Requirements
 
@@ -33,9 +42,13 @@ cd Synos
 python3 -m synos
 ```
 
-## Screenshot
+## Configuration
 
-Three-panel layout with Rooms, Now Playing (with VU meter), and Music Browser.
+All settings are stored in `~/.config/synos/`:
+
+- `streams.json` — Saved internet radio streams
+- `library.json` — Music library folder paths
+- `preferences.json` — Theme preference (dark/light)
 
 ## License
 
