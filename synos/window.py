@@ -12,12 +12,13 @@ import threading
 import webbrowser
 from urllib.parse import quote_plus
 
-from gi.repository import Adw, Gtk, GLib, Gdk, Pango
+from gi.repository import Adw, Gtk, GLib, Gdk, GdkPixbuf, Pango
 
 from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, play_file, get_transport_state
 from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
 from synos.vumeter import VuMeter
+from synos.albumart import fetch_album_art
 from synos.playqueue import PlayQueue
 from synos.httpserver import AudioServer
 from synos.library import (
@@ -294,14 +295,15 @@ class SynosWindow(Adw.ApplicationWindow):
         content.set_margin_end(16)
         content.set_valign(Gtk.Align.START)
 
-        # Disc art placeholder
-        disc_frame = Gtk.Frame()
-        disc_frame.add_css_class("disc-art")
-        disc_icon = Gtk.Image(icon_name="media-optical-symbolic")
-        disc_icon.set_pixel_size(64)
-        disc_icon.set_opacity(0.3)
-        disc_frame.set_child(disc_icon)
-        content.append(disc_frame)
+        # Album art / disc placeholder
+        self._art_frame = Gtk.Frame()
+        self._art_frame.add_css_class("disc-art")
+        self._art_disc_icon = Gtk.Image(icon_name="media-optical-symbolic")
+        self._art_disc_icon.set_pixel_size(64)
+        self._art_disc_icon.set_opacity(0.3)
+        self._art_frame.set_child(self._art_disc_icon)
+        content.append(self._art_frame)
+        self._current_art_key = None
 
         # Track info
         info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -1314,6 +1316,36 @@ class SynosWindow(Adw.ApplicationWindow):
         self._volume_scale.set_sensitive(sensitive)
         self._eq_btn.set_sensitive(sensitive)
 
+    # ── Album art ────────────────────────────────────────────────────
+
+    def _reset_album_art(self):
+        """Reset to disc icon placeholder."""
+        self._art_disc_icon.set_pixel_size(64)
+        self._art_disc_icon.set_opacity(0.3)
+        self._art_frame.set_child(self._art_disc_icon)
+
+    def _set_album_art_image(self, image_bytes):
+        """Set album art from raw image bytes (called on main thread)."""
+        try:
+            loader = GdkPixbuf.PixbufLoader()
+            loader.write(image_bytes)
+            loader.close()
+            pixbuf = loader.get_pixbuf()
+            # Scale to fit the disc-art frame
+            pixbuf = pixbuf.scale_simple(140, 140, GdkPixbuf.InterpType.BILINEAR)
+            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+            image = Gtk.Image.new_from_paintable(texture)
+            image.set_pixel_size(140)
+            self._art_frame.set_child(image)
+        except Exception:
+            self._reset_album_art()
+
+    def _fetch_art_bg(self, artist, title, art_key):
+        """Background thread: fetch album art and update UI."""
+        image_data = fetch_album_art(artist, title)
+        if image_data and self._current_art_key == art_key:
+            GLib.idle_add(self._set_album_art_image, image_data)
+
     # ── Now Playing polling ──────────────────────────────────────────
 
     def _start_polling(self):
@@ -1400,6 +1432,8 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._room_now_playing.set_text("")
                 self._yt_btn.set_visible(False)
                 self._discogs_btn.set_visible(False)
+                self._current_art_key = None
+                self._reset_album_art()
                 self._seek_scale.set_sensitive(False)
                 self._seek_scale.set_range(0, 1)
                 self._set_seek_value(0)
@@ -1419,6 +1453,18 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._discogs_btn.set_visible(has_track)
                 if display_title:
                     self._room_now_playing.set_text(f"  {display_title}")
+
+                # Fetch album art on track change
+                art_key = (artist.lower(), (display_title or "").lower())
+                if art_key != self._current_art_key:
+                    self._current_art_key = art_key
+                    self._reset_album_art()
+                    if has_track:
+                        threading.Thread(
+                            target=self._fetch_art_bg,
+                            args=(artist, display_title, art_key),
+                            daemon=True,
+                        ).start()
 
                 # Update seek slider (skip if user is dragging)
                 if dur_secs > 0:
