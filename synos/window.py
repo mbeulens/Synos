@@ -11,7 +11,7 @@ import os
 from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 
 from synos import __version__
-from synos.sonos_client import discover_speakers, play_stream, get_transport_state
+from synos.sonos_client import discover_speakers, play_stream, play_file, get_transport_state
 from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
 from synos.vumeter import VuMeter
 from synos.playqueue import PlayQueue
@@ -1090,7 +1090,7 @@ class SynosWindow(Adw.ApplicationWindow):
         if not self._active_speaker:
             return
         try:
-            play_stream(self._active_speaker, track["url"], title=track["title"])
+            play_file(self._active_speaker, track["url"], title=track["title"])
         except Exception:
             pass
 

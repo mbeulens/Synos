@@ -34,10 +34,18 @@ def discover_speakers(callback):
 
 
 def play_stream(speaker, stream_url, title="Internet Radio"):
-    """Play an audio stream on a Sonos speaker."""
+    """Play an internet radio stream on a Sonos speaker."""
     metadata = DIDL_TEMPLATE.format(title=title)
     sonos_uri = stream_url.replace("http://", "x-rincon-mp3radio://", 1)
     speaker.play_uri(uri=sonos_uri, meta=metadata, title=title)
+
+
+def play_file(speaker, file_url, title="Audio File"):
+    """Play a local audio file (via HTTP URL) on a Sonos speaker.
+
+    Uses plain http:// so Sonos can detect duration and support seeking.
+    """
+    speaker.play_uri(uri=file_url, title=title)
 
 
 def get_transport_state(speaker):
