@@ -8,6 +8,8 @@ gi.require_version("Adw", "1")
 import json
 import os
 import threading
+import webbrowser
+from urllib.parse import quote_plus
 
 from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 
@@ -315,6 +317,15 @@ class SynosWindow(Adw.ApplicationWindow):
         self._np_album.set_halign(Gtk.Align.START)
         self._np_album.set_ellipsize(Pango.EllipsizeMode.END)
         info_box.append(self._np_album)
+
+        # YouTube search button
+        self._yt_btn = Gtk.Button(icon_name="web-browser-symbolic")
+        self._yt_btn.add_css_class("flat")
+        self._yt_btn.set_tooltip_text("Search on YouTube")
+        self._yt_btn.set_valign(Gtk.Align.CENTER)
+        self._yt_btn.set_visible(False)
+        self._yt_btn.connect("clicked", self._on_youtube_clicked)
+        info_box.append(self._yt_btn)
 
         content.append(info_box)
         box.append(content)
@@ -1052,6 +1063,16 @@ class SynosWindow(Adw.ApplicationWindow):
         except Exception:
             pass
 
+    def _on_youtube_clicked(self, _btn):
+        """Open YouTube search for the current track."""
+        title = self._np_title.get_text().strip()
+        artist = self._np_artist.get_text().strip()
+        if not title or title in ("Nothing playing", "Stopped", "Unknown"):
+            return
+        query = f"{artist} {title}".strip() if artist else title
+        url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+        webbrowser.open(url)
+
     def _on_mute_clicked(self, _btn):
         if not self._active_speaker:
             return
@@ -1249,6 +1270,7 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._np_artist.set_text("")
                 self._np_album.set_text("")
                 self._room_now_playing.set_text("")
+                self._yt_btn.set_visible(False)
                 self._seek_scale.set_sensitive(False)
                 self._seek_scale.set_range(0, 1)
                 self._set_seek_value(0)
@@ -1263,6 +1285,7 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._np_title.set_text(display_title or "Unknown")
                 self._np_artist.set_text(artist)
                 self._np_album.set_text(album)
+                self._yt_btn.set_visible(bool(display_title and display_title != "Unknown"))
                 if display_title:
                     self._room_now_playing.set_text(f"  {display_title}")
 
