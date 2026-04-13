@@ -50,7 +50,7 @@ class SynosWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_title(f"Synos v{__version__}")
-        self.set_default_size(900, 500)
+        self.set_default_size(900, 600)
 
         self._speakers = []
         self._active_speaker = None
@@ -312,17 +312,14 @@ class SynosWindow(Adw.ApplicationWindow):
         content.append(info_box)
         box.append(content)
 
-        # Spacer to push VU meter down
-        spacer = Gtk.Box()
-        spacer.set_vexpand(True)
-        box.append(spacer)
-
         # VU Meter
         self._vu_meter = VuMeter()
         self._vu_meter.set_margin_start(16)
         self._vu_meter.set_margin_end(16)
+        self._vu_meter.set_margin_top(20)
         self._vu_meter.set_margin_bottom(12)
-        self._vu_meter.set_content_height(100)
+        self._vu_meter.set_content_height(80)
+        self._vu_meter.set_vexpand(True)
         box.append(self._vu_meter)
 
         return box
