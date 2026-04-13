@@ -14,6 +14,11 @@ from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, get_transport_state
 from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
 from synos.vumeter import VuMeter
+from synos.playqueue import PlayQueue
+from synos.httpserver import AudioServer
+from synos.library import (
+    load_library_folders, add_library_folder, remove_library_folder, scan_folder,
+)
 
 
 CSS = """
@@ -55,10 +60,13 @@ class SynosWindow(Adw.ApplicationWindow):
         self._speakers = []
         self._active_speaker = None
         self._poll_source_id = None
+        self._queue = PlayQueue()
+        self._audio_server = AudioServer()
 
         self._load_css()
         self._build_ui()
         self._start_discovery()
+        self._start_audio_server()
 
     # ── CSS ──────────────────────────────────────────────────────────
 
@@ -94,6 +102,7 @@ class SynosWindow(Adw.ApplicationWindow):
         self._prev_btn = Gtk.Button(icon_name="media-skip-backward-symbolic")
         self._prev_btn.add_css_class("flat")
         self._prev_btn.set_sensitive(False)
+        self._prev_btn.connect("clicked", self._on_prev_clicked)
 
         self._play_btn = Gtk.Button(icon_name="media-playback-start-symbolic")
         self._play_btn.add_css_class("flat")
@@ -108,6 +117,7 @@ class SynosWindow(Adw.ApplicationWindow):
         self._next_btn = Gtk.Button(icon_name="media-skip-forward-symbolic")
         self._next_btn.add_css_class("flat")
         self._next_btn.set_sensitive(False)
+        self._next_btn.connect("clicked", self._on_next_clicked)
 
         transport_box.append(self._prev_btn)
         transport_box.append(self._play_btn)
@@ -617,6 +627,13 @@ class SynosWindow(Adw.ApplicationWindow):
         self._update_theme_icon()
         self._save_theme_preference()
 
+    # ── Audio server ─────────────────────────────────────────────────
+
+    def _start_audio_server(self):
+        folders = load_library_folders()
+        self._audio_server.set_dirs(folders)
+        self._audio_server.start()
+
     # ── Discovery ────────────────────────────────────────────────────
 
     def _start_discovery(self):
@@ -737,6 +754,37 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._mute_btn.set_tooltip_text("Unmute")
         except Exception:
             pass
+
+    def _on_prev_clicked(self, _btn):
+        if not self._active_speaker:
+            return
+        track = self._queue.prev()
+        if track:
+            self._play_queue_track(track)
+        self._update_skip_buttons()
+
+    def _on_next_clicked(self, _btn):
+        if not self._active_speaker:
+            return
+        track = self._queue.next()
+        if track:
+            self._play_queue_track(track)
+        self._update_skip_buttons()
+
+    def _play_queue_track(self, track):
+        """Play a track from the queue on the active speaker."""
+        if not self._active_speaker:
+            return
+        try:
+            play_stream(self._active_speaker, track["url"], title=track["title"])
+        except Exception:
+            pass
+
+    def _update_skip_buttons(self):
+        """Update prev/next button sensitivity based on queue state."""
+        has_speaker = self._active_speaker is not None
+        self._prev_btn.set_sensitive(has_speaker and self._queue.has_prev)
+        self._next_btn.set_sensitive(has_speaker and self._queue.has_next)
 
     def _on_volume_changed(self, scale):
         vol = int(scale.get_value())
