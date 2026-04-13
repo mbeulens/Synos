@@ -456,6 +456,8 @@ class SynosWindow(Adw.ApplicationWindow):
         idx = row.get_index()
         if idx == 0:
             self._show_streams_view()
+        elif idx == 1:
+            self._show_library_folders_view()
 
     # ── Streams view ─────────────────────────────────────────────────
 
@@ -465,15 +467,20 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_title.set_text("STREAMS")
         self._browser_back_btn.set_visible(True)
         self._browser_add_btn.set_visible(True)
+        self._browser_add_btn.set_tooltip_text("Add stream")
 
+        # Reconnect add button for streams
         try:
-            self._browser_list.disconnect_by_func(self._on_root_activated)
+            self._browser_add_btn.disconnect_by_func(self._on_add_folder_clicked)
         except TypeError:
             pass
         try:
-            self._browser_list.disconnect_by_func(self._on_stream_activated)
+            self._browser_add_btn.disconnect_by_func(self._on_add_stream_clicked)
         except TypeError:
             pass
+        self._browser_add_btn.connect("clicked", self._on_add_stream_clicked)
+
+        self._disconnect_browser_signals()
 
         self._streams = load_streams()
 
@@ -514,7 +521,10 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_list.connect("row-activated", self._on_stream_activated)
 
     def _on_browser_back(self, _btn):
-        self._show_browser_root()
+        if self._browser_view == "library_files":
+            self._show_library_folders_view()
+        else:
+            self._show_browser_root()
 
     def _on_stream_activated(self, _listbox, row):
         if not self._active_speaker:
@@ -577,6 +587,236 @@ class SynosWindow(Adw.ApplicationWindow):
         if response == "remove":
             remove_stream(index)
             self._show_streams_view()
+
+    # ── Music Library views ──────────────────────────────────────────
+
+    def _show_library_folders_view(self):
+        """Show list of configured library folders."""
+        self._clear_browser_list()
+        self._browser_view = "library_folders"
+        self._browser_title.set_text("MUSIC LIBRARY")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(True)
+        self._browser_add_btn.set_tooltip_text("Add folder")
+
+        # Reconnect add button for folder adding
+        try:
+            self._browser_add_btn.disconnect_by_func(self._on_add_stream_clicked)
+        except TypeError:
+            pass
+        try:
+            self._browser_add_btn.disconnect_by_func(self._on_add_folder_clicked)
+        except TypeError:
+            pass
+        self._browser_add_btn.connect("clicked", self._on_add_folder_clicked)
+
+        self._disconnect_browser_signals()
+
+        self._library_folders = load_library_folders()
+
+        if not self._library_folders:
+            row = self._make_browser_row(
+                "list-add-symbolic", "No folders — click + to add", activatable=False
+            )
+            self._browser_list.append(row)
+            return
+
+        for i, folder_path in enumerate(self._library_folders):
+            folder_name = os.path.basename(folder_path) or folder_path
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(12)
+            row_box.set_margin_end(4)
+            row_box.set_margin_top(5)
+            row_box.set_margin_bottom(5)
+
+            icon = Gtk.Image(icon_name="folder-music-symbolic")
+            icon.set_pixel_size(16)
+            row_box.append(icon)
+
+            label = Gtk.Label(label=folder_name)
+            label.set_halign(Gtk.Align.START)
+            label.set_hexpand(True)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_tooltip_text(folder_path)
+            row_box.append(label)
+
+            remove_btn = Gtk.Button(icon_name="edit-delete-symbolic")
+            remove_btn.add_css_class("flat")
+            remove_btn.set_tooltip_text("Remove folder")
+            remove_btn.connect("clicked", self._on_remove_folder_clicked, i)
+            row_box.append(remove_btn)
+
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row_box.append(arrow)
+
+            row.set_child(row_box)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_library_folder_activated)
+
+    def _show_library_files_view(self, folder_index):
+        """Show audio files in a library folder."""
+        self._clear_browser_list()
+        self._browser_view = "library_files"
+        self._current_folder_index = folder_index
+        folder_path = self._library_folders[folder_index]
+        folder_name = os.path.basename(folder_path) or folder_path
+        self._browser_title.set_text(folder_name.upper())
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+
+        self._disconnect_browser_signals()
+
+        files = scan_folder(folder_path)
+        self._current_files = files
+        self._current_folder_path = folder_path
+
+        if not files:
+            row = self._make_browser_row(
+                "audio-x-generic-symbolic", "No audio files found", activatable=False
+            )
+            self._browser_list.append(row)
+            return
+
+        # Play All row
+        play_all_row = Gtk.ListBoxRow()
+        pa_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pa_box.set_margin_start(12)
+        pa_box.set_margin_end(12)
+        pa_box.set_margin_top(6)
+        pa_box.set_margin_bottom(6)
+        pa_icon = Gtk.Image(icon_name="media-playback-start-symbolic")
+        pa_icon.set_pixel_size(16)
+        pa_box.append(pa_icon)
+        pa_label = Gtk.Label(label=f"Play All ({len(files)} tracks)")
+        pa_label.set_halign(Gtk.Align.START)
+        pa_label.add_css_class("now-playing-title")
+        pa_box.append(pa_label)
+        play_all_row.set_child(pa_box)
+        self._browser_list.append(play_all_row)
+
+        # Individual files
+        for filename in files:
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(12)
+            row_box.set_margin_end(12)
+            row_box.set_margin_top(4)
+            row_box.set_margin_bottom(4)
+
+            icon = Gtk.Image(icon_name="audio-x-generic-symbolic")
+            icon.set_pixel_size(16)
+            row_box.append(icon)
+
+            name_no_ext = os.path.splitext(filename)[0]
+            label = Gtk.Label(label=name_no_ext)
+            label.set_halign(Gtk.Align.START)
+            label.set_hexpand(True)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_tooltip_text(filename)
+            row_box.append(label)
+
+            row.set_child(row_box)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_library_file_activated)
+
+    def _disconnect_browser_signals(self):
+        """Disconnect all browser list activation handlers."""
+        for handler in (
+            self._on_root_activated,
+            self._on_stream_activated,
+            self._on_library_folder_activated,
+            self._on_library_file_activated,
+        ):
+            try:
+                self._browser_list.disconnect_by_func(handler)
+            except TypeError:
+                pass
+
+    def _on_library_folder_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx < len(self._library_folders):
+            self._show_library_files_view(idx)
+
+    def _on_library_file_activated(self, _listbox, row):
+        if not self._active_speaker:
+            return
+        idx = row.get_index()
+
+        folder_idx = self._current_folder_index
+        files = self._current_files
+
+        if idx == 0:
+            # Play All
+            self._play_folder(folder_idx, files, start_index=0)
+        else:
+            # Play single file, but queue the whole folder from this point
+            file_index = idx - 1  # offset by Play All row
+            self._play_folder(folder_idx, files, start_index=file_index)
+
+    def _play_folder(self, folder_idx, files, start_index=0):
+        """Build queue from folder files and start playing."""
+        if not self._active_speaker or not files:
+            return
+
+        # Update audio server dirs
+        folders = load_library_folders()
+        self._audio_server.set_dirs(folders)
+
+        # Build queue items
+        items = []
+        for filename in files:
+            url = self._audio_server.file_url(folder_idx, filename)
+            name_no_ext = os.path.splitext(filename)[0]
+            items.append({"name": filename, "url": url, "title": name_no_ext})
+
+        self._queue.set_queue(items, start_index=start_index)
+        track = self._queue.current
+        if track:
+            self._play_queue_track(track)
+        self._update_skip_buttons()
+
+    def _on_add_folder_clicked(self, _btn):
+        """Open a folder chooser dialog."""
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Select Music Folder")
+        dialog.select_folder(self, None, self._on_folder_selected)
+
+    def _on_folder_selected(self, dialog, result):
+        try:
+            folder = dialog.select_folder_finish(result)
+            if folder:
+                path = folder.get_path()
+                add_library_folder(path)
+                # Update audio server
+                folders = load_library_folders()
+                self._audio_server.set_dirs(folders)
+                self._show_library_folders_view()
+        except Exception:
+            pass
+
+    def _on_remove_folder_clicked(self, _btn, index):
+        folder = self._library_folders[index]
+        folder_name = os.path.basename(folder) or folder
+        dialog = Adw.AlertDialog(
+            heading="Remove Folder",
+            body=f'Remove "{folder_name}" from library?',
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("remove", "Remove")
+        dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._on_remove_folder_response, index)
+        dialog.present(self)
+
+    def _on_remove_folder_response(self, dialog, response, index):
+        if response == "remove":
+            remove_library_folder(index)
+            folders = load_library_folders()
+            self._audio_server.set_dirs(folders)
+            self._show_library_folders_view()
 
     # ── Theme ────────────────────────────────────────────────────────
 
