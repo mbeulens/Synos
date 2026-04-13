@@ -567,6 +567,12 @@ class SynosWindow(Adw.ApplicationWindow):
         idx = row.get_index()
         if idx < len(self._streams):
             stream = self._streams[idx]
+            self._queue.clear()
+            self._set_seek_value(0)
+            self._seek_position_label.set_text("0:00")
+            self._seek_duration_label.set_text("")
+            self._seek_scale.set_sensitive(False)
+            self._update_skip_buttons()
             try:
                 play_stream(self._active_speaker, stream["url"], title=stream["name"])
             except Exception:
@@ -1086,6 +1092,14 @@ class SynosWindow(Adw.ApplicationWindow):
         """Play a track from the queue on the active speaker."""
         if not self._active_speaker:
             return
+        # Reset slider immediately
+        self._set_seek_value(0)
+        self._seek_position_label.set_text("0:00")
+        self._seek_duration_label.set_text("")
+        self._seek_scale.set_sensitive(False)
+        self._np_title.set_text(track["title"])
+        self._np_artist.set_text("")
+        self._np_album.set_text("")
         try:
             play_file(self._active_speaker, track["url"], title=track["title"])
         except Exception:
