@@ -1,39 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- Green circle background -->
-  <circle cx="64" cy="64" r="62" fill="#22c55e"/>
+  <!-- Green gradient circle -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="62" fill="url(#bg)"/>
 
-  <!-- Left speaker body -->
-  <rect x="18" y="32" width="34" height="64" rx="5" fill="#1a1a1a"/>
-  <!-- Woofer -->
-  <circle cx="35" cy="68" r="12" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="35" cy="68" r="7" fill="#333"/>
-  <circle cx="35" cy="68" r="2.5" fill="#666"/>
-  <!-- Tweeter -->
-  <circle cx="35" cy="46" r="6" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="35" cy="46" r="2.5" fill="#555"/>
+  <!-- Headphones arc -->
+  <path d="M32 68 Q32 32 64 28 Q96 32 96 68" fill="none" stroke="#1a1a1a" stroke-width="7" stroke-linecap="round"/>
 
-  <!-- Right speaker body -->
-  <rect x="76" y="32" width="34" height="64" rx="5" fill="#1a1a1a"/>
-  <!-- Woofer -->
-  <circle cx="93" cy="68" r="12" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="93" cy="68" r="7" fill="#333"/>
-  <circle cx="93" cy="68" r="2.5" fill="#666"/>
-  <!-- Tweeter -->
-  <circle cx="93" cy="46" r="6" fill="#2a2a2a" stroke="#555" stroke-width="1.5"/>
-  <circle cx="93" cy="46" r="2.5" fill="#555"/>
+  <!-- Left ear cup -->
+  <rect x="24" y="58" width="16" height="26" rx="6" fill="#1a1a1a"/>
+  <rect x="27" y="62" width="10" height="18" rx="4" fill="#2d2d2d"/>
 
-  <!-- Sound waves left (outward) -->
-  <path d="M14 52 Q6 64 14 76" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
-  <path d="M8 44 Q-3 64 8 84" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <!-- Right ear cup -->
+  <rect x="88" y="58" width="16" height="26" rx="6" fill="#1a1a1a"/>
+  <rect x="91" y="62" width="10" height="18" rx="4" fill="#2d2d2d"/>
 
-  <!-- Sound waves right (outward) -->
-  <path d="M114 52 Q122 64 114 76" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
-  <path d="M120 44 Q131 64 120 84" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <!-- EQ bars -->
+  <rect x="44" y="68" width="5" height="22" rx="2" fill="#fff" opacity="0.95"/>
+  <rect x="52" y="58" width="5" height="32" rx="2" fill="#fff" opacity="0.95"/>
+  <rect x="60" y="52" width="5" height="38" rx="2" fill="#fff"/>
+  <rect x="68" y="62" width="5" height="28" rx="2" fill="#fff" opacity="0.95"/>
+  <rect x="76" y="72" width="5" height="18" rx="2" fill="#fff" opacity="0.95"/>
 
-  <!-- Center blast lines -->
-  <path d="M56 48 L72 48" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
-  <path d="M54 56 L74 56" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
-  <path d="M53 64 L75 64" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-  <path d="M54 72 L74 72" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
-  <path d="M56 80 L72 80" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <!-- Beat dots -->
+  <circle cx="47" cy="96" r="2" fill="#fff" opacity="0.5"/>
+  <circle cx="55" cy="96" r="2" fill="#fff" opacity="0.7"/>
+  <circle cx="63" cy="96" r="2" fill="#fff" opacity="0.9"/>
+  <circle cx="71" cy="96" r="2" fill="#fff" opacity="0.7"/>
+  <circle cx="79" cy="96" r="2" fill="#fff" opacity="0.5"/>
 </svg>
