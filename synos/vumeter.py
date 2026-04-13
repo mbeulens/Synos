@@ -20,7 +20,7 @@ class VuMeter(Gtk.DrawingArea):
     def __init__(self):
         super().__init__()
         self.set_content_width(200)
-        self.set_content_height(80)
+        self.set_content_height(45)
         self.set_hexpand(True)
 
         self._playing = False
@@ -76,19 +76,21 @@ class VuMeter(Gtk.DrawingArea):
         if not self._playing:
             return False
 
-        t = GLib.get_monotonic_time() / 1_000_000.0
         for i in range(NUM_BARS):
-            base = 0.3 + 0.2 * math.sin(t * 2.5 + i * 0.4)
-            wave = 0.25 * math.sin(t * 4.0 + i * 0.7)
-            noise = random.uniform(-0.15, 0.15)
-            self._targets[i] = max(0.05, min(1.0, base + wave + noise))
+            # Each bar gets a fully random target — no spatial correlation
+            if random.random() < 0.3:
+                # 30% chance to jump to a new random level
+                self._targets[i] = random.uniform(0.05, 1.0)
+            # Occasional spikes
+            if random.random() < 0.05:
+                self._targets[i] = random.uniform(0.7, 1.0)
 
         for i in range(NUM_BARS):
             diff = self._targets[i] - self._levels[i]
             if diff > 0:
-                self._levels[i] += diff * 0.4
+                self._levels[i] += diff * 0.5  # fast rise
             else:
-                self._levels[i] += diff * 0.15
+                self._levels[i] += diff * 0.25  # faster fall
 
             if self._levels[i] > self._peaks[i]:
                 self._peaks[i] = self._levels[i]
