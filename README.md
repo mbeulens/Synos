@@ -42,6 +42,31 @@ cd Synos
 python3 -m synos
 ```
 
+## Desktop Launcher
+
+Create `~/.local/share/applications/com.github.synos.desktop`:
+
+```ini
+[Desktop Entry]
+Name=Synos
+Comment=Sonos controller for Linux
+Exec=python3 -m synos
+Path=/path/to/Synos
+Icon=audio-speakers-symbolic
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;GTK;
+Keywords=sonos;music;speaker;stream;
+```
+
+Update `Path=` to your Synos directory, then run:
+
+```bash
+update-desktop-database ~/.local/share/applications/
+```
+
+Synos will appear in your application launcher.
+
 ## Configuration
 
 All settings are stored in `~/.config/synos/`:
