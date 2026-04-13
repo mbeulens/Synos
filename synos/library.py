@@ -50,19 +50,23 @@ def remove_library_folder(index):
 
 
 def scan_folder(folder_path):
-    """Scan a folder for supported audio files (non-recursive).
+    """Scan a folder for subdirectories and supported audio files.
 
-    Returns a sorted list of (filename, relative_path) tuples.
+    Returns (subdirs, files) where both are sorted name lists.
     """
+    subdirs = []
     files = []
     if not os.path.isdir(folder_path):
-        return files
+        return subdirs, files
 
     for entry in os.scandir(folder_path):
-        if entry.is_file():
+        if entry.is_dir() and not entry.name.startswith("."):
+            subdirs.append(entry.name)
+        elif entry.is_file():
             ext = os.path.splitext(entry.name)[1].lower()
             if ext in AUDIO_EXTENSIONS:
                 files.append(entry.name)
 
+    subdirs.sort(key=str.lower)
     files.sort(key=str.lower)
-    return files
+    return subdirs, files

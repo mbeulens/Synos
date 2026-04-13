@@ -522,7 +522,15 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _on_browser_back(self, _btn):
         if self._browser_view == "library_files":
-            self._show_library_folders_view()
+            if self._current_subfolder_rel:
+                # Go up one level in subfolder
+                parent_rel = os.path.dirname(self._current_subfolder_rel)
+                if parent_rel:
+                    self._show_library_files_view(self._current_folder_index, subfolder_rel=parent_rel)
+                else:
+                    self._show_library_files_view(self._current_folder_index)
+            else:
+                self._show_library_folders_view()
         else:
             self._show_browser_root()
 
@@ -656,12 +664,14 @@ class SynosWindow(Adw.ApplicationWindow):
 
         self._browser_list.connect("row-activated", self._on_library_folder_activated)
 
-    def _show_library_files_view(self, folder_index):
-        """Show audio files in a library folder."""
+    def _show_library_files_view(self, folder_index, subfolder_rel=""):
+        """Show subdirs and audio files in a library folder/subfolder."""
         self._clear_browser_list()
         self._browser_view = "library_files"
         self._current_folder_index = folder_index
-        folder_path = self._library_folders[folder_index]
+        self._current_subfolder_rel = subfolder_rel
+        root_path = self._library_folders[folder_index]
+        folder_path = os.path.join(root_path, subfolder_rel) if subfolder_rel else root_path
         folder_name = os.path.basename(folder_path) or folder_path
         self._browser_title.set_text(folder_name.upper())
         self._browser_back_btn.set_visible(True)
@@ -669,35 +679,45 @@ class SynosWindow(Adw.ApplicationWindow):
 
         self._disconnect_browser_signals()
 
-        files = scan_folder(folder_path)
+        subdirs, files = scan_folder(folder_path)
         self._current_files = files
         self._current_folder_path = folder_path
+        self._current_subdirs = subdirs
 
-        if not files:
-            row = self._make_browser_row(
-                "audio-x-generic-symbolic", "No audio files found", activatable=False
-            )
+        # Track how many non-file rows are at the top
+        top_rows = 0
+
+        # Play All row (only if there are files)
+        if files:
+            play_all_row = Gtk.ListBoxRow()
+            pa_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            pa_box.set_margin_start(12)
+            pa_box.set_margin_end(12)
+            pa_box.set_margin_top(6)
+            pa_box.set_margin_bottom(6)
+            pa_icon = Gtk.Image(icon_name="media-playback-start-symbolic")
+            pa_icon.set_pixel_size(16)
+            pa_box.append(pa_icon)
+            pa_label = Gtk.Label(label=f"Play All ({len(files)} tracks)")
+            pa_label.set_halign(Gtk.Align.START)
+            pa_label.add_css_class("now-playing-title")
+            pa_box.append(pa_label)
+            play_all_row.set_child(pa_box)
+            self._browser_list.append(play_all_row)
+            top_rows += 1
+
+        # Subdirectories
+        for dirname in subdirs:
+            row = self._make_browser_row("folder-symbolic", dirname)
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
             self._browser_list.append(row)
-            return
+            top_rows += 1
 
-        # Play All row
-        play_all_row = Gtk.ListBoxRow()
-        pa_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        pa_box.set_margin_start(12)
-        pa_box.set_margin_end(12)
-        pa_box.set_margin_top(6)
-        pa_box.set_margin_bottom(6)
-        pa_icon = Gtk.Image(icon_name="media-playback-start-symbolic")
-        pa_icon.set_pixel_size(16)
-        pa_box.append(pa_icon)
-        pa_label = Gtk.Label(label=f"Play All ({len(files)} tracks)")
-        pa_label.set_halign(Gtk.Align.START)
-        pa_label.add_css_class("now-playing-title")
-        pa_box.append(pa_label)
-        play_all_row.set_child(pa_box)
-        self._browser_list.append(play_all_row)
+        self._files_top_rows = top_rows
 
-        # Individual files
+        # Audio files
         for filename in files:
             row = Gtk.ListBoxRow()
             row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -721,6 +741,12 @@ class SynosWindow(Adw.ApplicationWindow):
             row.set_child(row_box)
             self._browser_list.append(row)
 
+        if not subdirs and not files:
+            row = self._make_browser_row(
+                "folder-symbolic", "Empty folder", activatable=False
+            )
+            self._browser_list.append(row)
+
         self._browser_list.connect("row-activated", self._on_library_file_activated)
 
     def _disconnect_browser_signals(self):
@@ -742,34 +768,52 @@ class SynosWindow(Adw.ApplicationWindow):
             self._show_library_files_view(idx)
 
     def _on_library_file_activated(self, _listbox, row):
-        if not self._active_speaker:
-            return
         idx = row.get_index()
-
-        folder_idx = self._current_folder_index
+        top_rows = self._files_top_rows
         files = self._current_files
+        subdirs = self._current_subdirs
+        has_play_all = len(files) > 0
 
-        if idx == 0:
+        # Determine what was clicked
+        if has_play_all and idx == 0:
             # Play All
-            self._play_folder(folder_idx, files, start_index=0)
-        else:
-            # Play single file, but queue the whole folder from this point
-            file_index = idx - 1  # offset by Play All row
-            self._play_folder(folder_idx, files, start_index=file_index)
+            if self._active_speaker:
+                self._play_folder_files(files, start_index=0)
+            return
 
-    def _play_folder(self, folder_idx, files, start_index=0):
-        """Build queue from folder files and start playing."""
+        # Offset past Play All row
+        adjusted = idx - (1 if has_play_all else 0)
+
+        if adjusted < len(subdirs):
+            # Subfolder clicked — navigate into it
+            subdir = subdirs[adjusted]
+            new_rel = os.path.join(self._current_subfolder_rel, subdir) if self._current_subfolder_rel else subdir
+            self._show_library_files_view(self._current_folder_index, subfolder_rel=new_rel)
+            return
+
+        # Audio file clicked
+        file_index = adjusted - len(subdirs)
+        if self._active_speaker and 0 <= file_index < len(files):
+            self._play_folder_files(files, start_index=file_index)
+
+    def _play_folder_files(self, files, start_index=0):
+        """Build queue from files in current folder path and start playing."""
         if not self._active_speaker or not files:
             return
+
+        folder_path = self._current_folder_path
+        folder_idx = self._current_folder_index
+        subfolder_rel = self._current_subfolder_rel
 
         # Update audio server dirs
         folders = load_library_folders()
         self._audio_server.set_dirs(folders)
 
-        # Build queue items
+        # Build queue items — use subfolder-relative paths for the HTTP server
         items = []
         for filename in files:
-            url = self._audio_server.file_url(folder_idx, filename)
+            rel_path = os.path.join(subfolder_rel, filename) if subfolder_rel else filename
+            url = self._audio_server.file_url(folder_idx, rel_path)
             name_no_ext = os.path.splitext(filename)[0]
             items.append({"name": filename, "url": url, "title": name_no_ext})
 
@@ -1084,7 +1128,11 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._room_now_playing.set_text("")
             else:
                 self._np_stream_name.set_text(channel)
-                self._np_title.set_text(title or "Unknown")
+                # Fall back to queue track title if Sonos metadata is empty
+                display_title = title
+                if not display_title and self._queue.current:
+                    display_title = self._queue.current.get("title", "")
+                self._np_title.set_text(display_title or "Unknown")
                 self._np_artist.set_text(artist)
                 self._np_album.set_text(album)
                 self._np_position.set_text(position if position != "0:00:00" else "")
