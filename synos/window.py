@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk, GLib, Gdk, Pango
 
+from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, get_transport_state
 
 
@@ -84,7 +85,7 @@ CSS = """
 class SynosWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.set_title("Synos")
+        self.set_title(f"Synos v{__version__}")
         self.set_default_size(900, 500)
 
         self._speakers = []
