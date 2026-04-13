@@ -336,12 +336,9 @@ class SynosWindow(Adw.ApplicationWindow):
         self._seek_scale.set_draw_value(False)
         self._seek_scale.set_sensitive(False)
         self._seeking = False
-
-        # Track drag start/end to suppress polling during seek
-        click = Gtk.GestureClick()
-        click.connect("pressed", self._on_seek_pressed)
-        click.connect("released", self._on_seek_released)
-        self._seek_scale.add_controller(click)
+        self._seek_programmatic = False
+        self._seek_debounce_id = None
+        self._seek_scale.connect("value-changed", self._on_seek_value_changed)
 
         seek_box.append(self._seek_scale)
 
@@ -1100,15 +1097,33 @@ class SynosWindow(Adw.ApplicationWindow):
         self._prev_btn.set_sensitive(has_speaker and self._queue.has_prev)
         self._next_btn.set_sensitive(has_speaker and self._queue.has_next)
 
-    def _on_seek_pressed(self, gesture, n_press, x, y):
-        """User started dragging the seek slider."""
+    def _set_seek_value(self, value):
+        """Programmatically set slider value without triggering seek."""
+        self._seek_programmatic = True
+        self._seek_scale.set_value(value)
+        self._seek_programmatic = False
+
+    def _on_seek_value_changed(self, scale):
+        """User moved the seek slider — debounce and seek."""
+        if self._seek_programmatic:
+            return
+
+        # Mark as seeking to suppress poll updates
         self._seeking = True
 
-    def _on_seek_released(self, gesture, n_press, x, y):
-        """User released the seek slider — perform the seek."""
+        # Cancel previous debounce timer
+        if self._seek_debounce_id is not None:
+            GLib.source_remove(self._seek_debounce_id)
+
+        # Seek after 300ms of no further changes
+        self._seek_debounce_id = GLib.timeout_add(300, self._do_seek)
+
+    def _do_seek(self):
+        """Actually perform the seek on Sonos."""
+        self._seek_debounce_id = None
         self._seeking = False
         if not self._active_speaker:
-            return
+            return False
         seconds = max(0, int(self._seek_scale.get_value()))
         h = seconds // 3600
         m = (seconds % 3600) // 60
@@ -1118,6 +1133,7 @@ class SynosWindow(Adw.ApplicationWindow):
             self._active_speaker.seek(time_str)
         except Exception:
             pass
+        return False
 
     def _on_volume_changed(self, scale):
         vol = int(scale.get_value())
@@ -1218,7 +1234,7 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._room_now_playing.set_text("")
                 self._seek_scale.set_sensitive(False)
                 self._seek_scale.set_range(0, 1)
-                self._seek_scale.set_value(0)
+                self._set_seek_value(0)
                 self._seek_position_label.set_text("0:00")
                 self._seek_duration_label.set_text("0:00")
             else:
@@ -1238,7 +1254,7 @@ class SynosWindow(Adw.ApplicationWindow):
                     self._seek_scale.set_sensitive(True)
                     self._seek_scale.set_range(0, dur_secs)
                     if not self._seeking:
-                        self._seek_scale.set_value(pos_secs)
+                        self._set_seek_value(pos_secs)
                     self._seek_position_label.set_text(self._format_time(pos_secs))
                     self._seek_duration_label.set_text(self._format_time(dur_secs))
                 else:
@@ -1246,7 +1262,7 @@ class SynosWindow(Adw.ApplicationWindow):
                     self._seek_scale.set_sensitive(False)
                     self._seek_scale.set_range(0, 1)
                     if not self._seeking:
-                        self._seek_scale.set_value(0)
+                        self._set_seek_value(0)
                     self._seek_position_label.set_text(self._format_time(pos_secs) if pos_secs else "")
                     self._seek_duration_label.set_text("")
         except Exception:
