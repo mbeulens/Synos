@@ -24,6 +24,8 @@ from synos.httpserver import AudioServer, set_log_callback as set_http_log
 from synos.library import (
     load_library_folders, add_library_folder, remove_library_folder, scan_folder,
 )
+from synos import service_ytmusic, service_soundcloud
+from synos.httpserver import register_proxy
 
 
 CSS = """
@@ -266,6 +268,8 @@ class SynosWindow(Adw.ApplicationWindow):
         self._console_pane = self._build_console()
         set_art_log(self._console_log)
         set_http_log(self._console_log)
+        service_ytmusic.set_log_callback(self._console_log)
+        service_soundcloud.set_log_callback(self._console_log)
         self._main_vpaned.set_end_child(self._console_pane)
         self._main_vpaned.set_shrink_end_child(False)
         self._main_vpaned.set_resize_end_child(False)
@@ -587,6 +591,8 @@ class SynosWindow(Adw.ApplicationWindow):
             self._show_streams_view()
         elif idx == 1:
             self._show_library_folders_view()
+        elif idx == 2:
+            self._show_services_view()
 
     # ── Streams view ─────────────────────────────────────────────────
 
@@ -652,7 +658,6 @@ class SynosWindow(Adw.ApplicationWindow):
     def _on_browser_back(self, _btn):
         if self._browser_view == "library_files":
             if self._current_subfolder_rel:
-                # Go up one level in subfolder
                 parent_rel = os.path.dirname(self._current_subfolder_rel)
                 if parent_rel:
                     self._show_library_files_view(self._current_folder_index, subfolder_rel=parent_rel)
@@ -660,6 +665,18 @@ class SynosWindow(Adw.ApplicationWindow):
                     self._show_library_files_view(self._current_folder_index)
             else:
                 self._show_library_folders_view()
+        elif self._browser_view in ("svc_ytmusic_search", "svc_ytmusic_playlists", "svc_ytmusic_playlist_tracks"):
+            if self._browser_view == "svc_ytmusic_playlist_tracks":
+                self._show_ytmusic_playlists_view()
+            else:
+                self._show_services_view()
+        elif self._browser_view in ("svc_sc_search", "svc_sc_playlists", "svc_sc_playlist_tracks"):
+            if self._browser_view == "svc_sc_playlist_tracks":
+                self._show_sc_playlists_view()
+            else:
+                self._show_services_view()
+        elif self._browser_view == "svc_settings":
+            self._show_services_view()
         else:
             self._show_browser_root()
 
@@ -900,6 +917,12 @@ class SynosWindow(Adw.ApplicationWindow):
             self._on_stream_activated,
             self._on_library_folder_activated,
             self._on_library_file_activated,
+            self._on_services_activated,
+            self._on_ytmusic_menu_activated,
+            self._on_sc_menu_activated,
+            self._on_svc_search_activated,
+            self._on_svc_playlist_activated,
+            self._on_svc_playlist_track_activated,
         ):
             try:
                 self._browser_list.disconnect_by_func(handler)
@@ -1005,6 +1028,628 @@ class SynosWindow(Adw.ApplicationWindow):
             folders = load_library_folders()
             self._audio_server.set_dirs(folders)
             self._show_library_folders_view()
+
+    # ── Music Services views ───────────────────────────────────────
+
+    def _show_services_view(self):
+        """Show list of available music services."""
+        self._clear_browser_list()
+        self._browser_view = "services"
+        self._browser_title.set_text("MUSIC SERVICES")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        services = [
+            ("emblem-music-symbolic", "YouTube Music"),
+            ("audio-headphones-symbolic", "SoundCloud"),
+            ("preferences-system-symbolic", "Settings"),
+        ]
+
+        for icon_name, label_text in services:
+            row = self._make_browser_row(icon_name, label_text)
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_services_activated)
+
+    def _on_services_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx == 0:
+            self._show_ytmusic_menu()
+        elif idx == 1:
+            self._show_sc_menu()
+        elif idx == 2:
+            self._show_services_settings()
+
+    # ── YouTube Music ────────────────────────────────────────────────
+
+    def _show_ytmusic_menu(self):
+        """Show YouTube Music options: Search, Playlists."""
+        self._clear_browser_list()
+        self._browser_view = "svc_ytmusic"
+        self._browser_title.set_text("YOUTUBE MUSIC")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        items = [
+            ("system-search-symbolic", "Search"),
+            ("view-list-symbolic", "My Playlists"),
+        ]
+        for icon_name, label_text in items:
+            row = self._make_browser_row(icon_name, label_text)
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_ytmusic_menu_activated)
+
+    def _on_ytmusic_menu_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx == 0:
+            self._show_svc_search_view("ytmusic")
+        elif idx == 1:
+            self._show_ytmusic_playlists_view()
+
+    def _show_ytmusic_playlists_view(self):
+        """Show user's YouTube Music playlists."""
+        self._clear_browser_list()
+        self._browser_view = "svc_ytmusic_playlists"
+        self._browser_title.set_text("MY PLAYLISTS")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        if not service_ytmusic.is_configured():
+            row = self._make_browser_row(
+                "dialog-warning-symbolic",
+                "Set browser in Settings first",
+                activatable=False,
+            )
+            self._browser_list.append(row)
+            return
+
+        # Fetch in background
+        spinner_row = self._make_browser_row("content-loading-symbolic", "Loading playlists...", activatable=False)
+        self._browser_list.append(spinner_row)
+
+        def _fetch():
+            playlists = service_ytmusic.get_playlists()
+            GLib.idle_add(self._populate_ytmusic_playlists, playlists)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _populate_ytmusic_playlists(self, playlists):
+        if self._browser_view != "svc_ytmusic_playlists":
+            return
+        self._clear_browser_list()
+        self._svc_playlists = playlists
+        self._svc_playlist_service = "ytmusic"
+
+        if not playlists:
+            row = self._make_browser_row("dialog-information-symbolic", "No playlists found", activatable=False)
+            self._browser_list.append(row)
+            return
+
+        for pl in playlists:
+            count = f" ({pl['count']})" if pl.get("count") else ""
+            row = self._make_browser_row("view-list-symbolic", f"{pl['title']}{count}")
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_svc_playlist_activated)
+
+    # ── SoundCloud ───────────────────────────────────────────────────
+
+    def _show_sc_menu(self):
+        """Show SoundCloud options: Search, Playlists."""
+        self._clear_browser_list()
+        self._browser_view = "svc_sc"
+        self._browser_title.set_text("SOUNDCLOUD")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        items = [
+            ("system-search-symbolic", "Search"),
+            ("view-list-symbolic", "My Playlists"),
+        ]
+        for icon_name, label_text in items:
+            row = self._make_browser_row(icon_name, label_text)
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_sc_menu_activated)
+
+    def _on_sc_menu_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx == 0:
+            self._show_svc_search_view("soundcloud")
+        elif idx == 1:
+            self._show_sc_playlists_view()
+
+    def _show_sc_playlists_view(self):
+        """Show user's SoundCloud playlists."""
+        self._clear_browser_list()
+        self._browser_view = "svc_sc_playlists"
+        self._browser_title.set_text("MY PLAYLISTS")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        if not service_soundcloud.get_profile_url():
+            row = self._make_browser_row(
+                "dialog-warning-symbolic",
+                "Set profile URL in Settings first",
+                activatable=False,
+            )
+            self._browser_list.append(row)
+            return
+
+        spinner_row = self._make_browser_row("content-loading-symbolic", "Loading playlists...", activatable=False)
+        self._browser_list.append(spinner_row)
+
+        def _fetch():
+            playlists = service_soundcloud.get_user_playlists()
+            GLib.idle_add(self._populate_sc_playlists, playlists)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _populate_sc_playlists(self, playlists):
+        if self._browser_view != "svc_sc_playlists":
+            return
+        self._clear_browser_list()
+        self._svc_playlists = playlists
+        self._svc_playlist_service = "soundcloud"
+
+        if not playlists:
+            row = self._make_browser_row("dialog-information-symbolic", "No playlists found", activatable=False)
+            self._browser_list.append(row)
+            return
+
+        for pl in playlists:
+            count = f" ({pl['count']})" if pl.get("count") else ""
+            row = self._make_browser_row("view-list-symbolic", f"{pl['title']}{count}")
+            arrow = Gtk.Image(icon_name="go-next-symbolic")
+            arrow.set_opacity(0.5)
+            row.get_child().append(arrow)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_svc_playlist_activated)
+
+    # ── Shared: Search view ──────────────────────────────────────────
+
+    def _show_svc_search_view(self, service):
+        """Show search view for a service (ytmusic or soundcloud)."""
+        self._clear_browser_list()
+        self._browser_view = f"svc_{service}_search" if service == "ytmusic" else "svc_sc_search"
+        self._svc_search_service = service
+        self._browser_title.set_text("SEARCH")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        # Search entry at top
+        search_row = Gtk.ListBoxRow()
+        search_row.set_activatable(False)
+        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        search_box.set_margin_start(12)
+        search_box.set_margin_end(12)
+        search_box.set_margin_top(8)
+        search_box.set_margin_bottom(8)
+
+        self._svc_search_entry = Gtk.Entry()
+        self._svc_search_entry.set_placeholder_text("Search...")
+        self._svc_search_entry.set_hexpand(True)
+        self._svc_search_entry.connect("activate", self._on_svc_search_submit)
+        search_box.append(self._svc_search_entry)
+
+        search_btn = Gtk.Button(icon_name="system-search-symbolic")
+        search_btn.connect("clicked", self._on_svc_search_submit)
+        search_box.append(search_btn)
+
+        search_row.set_child(search_box)
+        self._browser_list.append(search_row)
+
+        self._svc_search_entry.grab_focus()
+
+    def _on_svc_search_submit(self, *_args):
+        query = self._svc_search_entry.get_text().strip()
+        if not query:
+            return
+        service = self._svc_search_service
+
+        # Clear results below search bar
+        while self._browser_list.get_row_at_index(1):
+            self._browser_list.remove(self._browser_list.get_row_at_index(1))
+
+        loading = self._make_browser_row("content-loading-symbolic", "Searching...", activatable=False)
+        self._browser_list.append(loading)
+
+        def _fetch():
+            if service == "ytmusic":
+                results = service_ytmusic.search(query)
+            else:
+                results = service_soundcloud.search(query)
+            GLib.idle_add(self._populate_svc_search_results, results)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _populate_svc_search_results(self, results):
+        # Clear everything below search bar
+        while self._browser_list.get_row_at_index(1):
+            self._browser_list.remove(self._browser_list.get_row_at_index(1))
+
+        self._svc_search_results = results
+
+        if not results:
+            row = self._make_browser_row("dialog-information-symbolic", "No results", activatable=False)
+            self._browser_list.append(row)
+            return
+
+        for track in results:
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(12)
+            row_box.set_margin_end(12)
+            row_box.set_margin_top(4)
+            row_box.set_margin_bottom(4)
+
+            icon = Gtk.Image(icon_name="audio-x-generic-symbolic")
+            icon.set_pixel_size(16)
+            row_box.append(icon)
+
+            info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            info_box.set_hexpand(True)
+
+            title_label = Gtk.Label(label=track["title"])
+            title_label.set_halign(Gtk.Align.START)
+            title_label.set_ellipsize(Pango.EllipsizeMode.END)
+            info_box.append(title_label)
+
+            artist = track.get("artist", "")
+            duration = track.get("duration", "")
+            subtitle = f"{artist}  ·  {duration}" if artist and duration else artist or duration
+            if subtitle:
+                sub_label = Gtk.Label(label=subtitle)
+                sub_label.set_halign(Gtk.Align.START)
+                sub_label.set_ellipsize(Pango.EllipsizeMode.END)
+                sub_label.add_css_class("dim-label")
+                info_box.append(sub_label)
+
+            row_box.append(info_box)
+            row.set_child(row_box)
+            self._browser_list.append(row)
+
+        try:
+            self._browser_list.disconnect_by_func(self._on_svc_search_activated)
+        except TypeError:
+            pass
+        self._browser_list.connect("row-activated", self._on_svc_search_activated)
+
+    def _on_svc_search_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx == 0:  # search bar row
+            return
+        result_idx = idx - 1
+        if result_idx < 0 or result_idx >= len(self._svc_search_results):
+            return
+        track = self._svc_search_results[result_idx]
+        self._play_service_track(track)
+
+    # ── Shared: Playlist tracks view ─────────────────────────────────
+
+    def _on_svc_playlist_activated(self, _listbox, row):
+        idx = row.get_index()
+        if idx < 0 or idx >= len(self._svc_playlists):
+            return
+        playlist = self._svc_playlists[idx]
+        service = self._svc_playlist_service
+
+        self._clear_browser_list()
+        self._browser_view = f"svc_{service}_playlist_tracks"
+        self._browser_title.set_text(playlist["title"].upper())
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        loading = self._make_browser_row("content-loading-symbolic", "Loading tracks...", activatable=False)
+        self._browser_list.append(loading)
+
+        def _fetch():
+            if service == "ytmusic":
+                tracks = service_ytmusic.get_playlist_tracks(playlist["playlist_id"])
+            else:
+                tracks = service_soundcloud.get_playlist_tracks(playlist["playlist_url"])
+            GLib.idle_add(self._populate_svc_playlist_tracks, tracks)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _populate_svc_playlist_tracks(self, tracks):
+        self._clear_browser_list()
+        self._svc_playlist_tracks = tracks
+
+        if not tracks:
+            row = self._make_browser_row("dialog-information-symbolic", "No tracks", activatable=False)
+            self._browser_list.append(row)
+            return
+
+        # Play All row
+        play_all_row = Gtk.ListBoxRow()
+        pa_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pa_box.set_margin_start(12)
+        pa_box.set_margin_end(12)
+        pa_box.set_margin_top(6)
+        pa_box.set_margin_bottom(6)
+        pa_icon = Gtk.Image(icon_name="media-playback-start-symbolic")
+        pa_icon.set_pixel_size(16)
+        pa_box.append(pa_icon)
+        pa_label = Gtk.Label(label=f"Play All ({len(tracks)} tracks)")
+        pa_label.set_halign(Gtk.Align.START)
+        pa_label.add_css_class("now-playing-title")
+        pa_box.append(pa_label)
+        play_all_row.set_child(pa_box)
+        self._browser_list.append(play_all_row)
+
+        for track in tracks:
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(12)
+            row_box.set_margin_end(12)
+            row_box.set_margin_top(4)
+            row_box.set_margin_bottom(4)
+
+            icon = Gtk.Image(icon_name="audio-x-generic-symbolic")
+            icon.set_pixel_size(16)
+            row_box.append(icon)
+
+            info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            info_box.set_hexpand(True)
+
+            title_label = Gtk.Label(label=track["title"])
+            title_label.set_halign(Gtk.Align.START)
+            title_label.set_ellipsize(Pango.EllipsizeMode.END)
+            info_box.append(title_label)
+
+            artist = track.get("artist", "")
+            duration = track.get("duration", "")
+            subtitle = f"{artist}  ·  {duration}" if artist and duration else artist or duration
+            if subtitle:
+                sub_label = Gtk.Label(label=subtitle)
+                sub_label.set_halign(Gtk.Align.START)
+                sub_label.set_ellipsize(Pango.EllipsizeMode.END)
+                sub_label.add_css_class("dim-label")
+                info_box.append(sub_label)
+
+            row_box.append(info_box)
+            row.set_child(row_box)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_svc_playlist_track_activated)
+
+    def _on_svc_playlist_track_activated(self, _listbox, row):
+        idx = row.get_index()
+        tracks = self._svc_playlist_tracks
+
+        if idx == 0:
+            # Play All — queue all tracks starting from first
+            self._play_service_playlist(tracks, start_index=0)
+        elif idx > 0 and idx - 1 < len(tracks):
+            # Play from this track, queue the rest
+            self._play_service_playlist(tracks, start_index=idx - 1)
+
+    # ── Shared: Play service track ───────────────────────────────────
+
+    def _play_service_track(self, track):
+        """Extract audio and play a single service track."""
+        if not self._active_speaker:
+            return
+        self._console_log(f"Playing service track: {track['title']}", "info")
+
+        # Reset UI
+        self._set_seek_value(0)
+        self._seek_position_label.set_text("0:00")
+        self._seek_duration_label.set_text("")
+        self._seek_scale.set_sensitive(False)
+        self._np_title.set_text(track["title"])
+        self._np_artist.set_text(track.get("artist", ""))
+        self._np_album.set_text("")
+        self._queue.clear()
+        self._update_skip_buttons()
+
+        speaker = self._active_speaker
+        threading.Thread(
+            target=self._extract_and_play_bg,
+            args=(speaker, track),
+            daemon=True,
+        ).start()
+
+    def _play_service_playlist(self, tracks, start_index=0):
+        """Queue and play service tracks starting from start_index."""
+        if not self._active_speaker or not tracks:
+            return
+
+        # We'll extract and play the first track, then build the queue
+        # Queue items will be extracted on-demand via next/prev
+        self._svc_queue_tracks = tracks
+        self._svc_queue_index = start_index
+
+        track = tracks[start_index]
+        self._console_log(f"Playing service playlist from: {track['title']}", "info")
+
+        self._set_seek_value(0)
+        self._seek_position_label.set_text("0:00")
+        self._seek_duration_label.set_text("")
+        self._seek_scale.set_sensitive(False)
+        self._np_title.set_text(track["title"])
+        self._np_artist.set_text(track.get("artist", ""))
+        self._np_album.set_text("")
+
+        speaker = self._active_speaker
+        threading.Thread(
+            target=self._extract_and_play_bg,
+            args=(speaker, track, tracks, start_index),
+            daemon=True,
+        ).start()
+
+    def _extract_and_play_bg(self, speaker, track, playlist_tracks=None, start_index=0):
+        """Background: extract audio URL, register proxy, play on Sonos."""
+        service = self._svc_search_service if hasattr(self, "_svc_search_service") else "ytmusic"
+
+        # Determine service from track keys
+        if "video_id" in track:
+            result = service_ytmusic.extract_audio_url(track["video_id"])
+        elif "track_url" in track:
+            result = service_soundcloud.extract_audio_url(track["track_url"])
+        else:
+            self._console_log("No extractable URL in track", "error")
+            return
+
+        if not result:
+            self._console_log(f"Failed to extract audio for: {track['title']}", "error")
+            return
+
+        proxy_id = register_proxy(
+            result["url"],
+            headers=result.get("headers"),
+            content_type=result.get("content_type", "audio/mpeg"),
+        )
+        proxy_url = self._audio_server.proxy_url(proxy_id)
+
+        self._console_log(f"Proxy URL: {proxy_url}", "info")
+
+        # Build queue if playlist
+        if playlist_tracks:
+            items = []
+            for i, t in enumerate(playlist_tracks):
+                items.append({
+                    "name": t["title"],
+                    "title": t["title"],
+                    "url": "",  # Will be extracted on-demand
+                    "_svc_track": t,  # Store original track for extraction
+                })
+            # Set the current track's URL
+            items[start_index]["url"] = proxy_url
+            self._queue.set_queue(items, start_index=start_index)
+        else:
+            self._queue.set_queue([{
+                "name": track["title"],
+                "title": track["title"],
+                "url": proxy_url,
+                "_svc_track": track,
+            }])
+
+        try:
+            play_file(speaker, proxy_url, title=track["title"])
+            self._console_log(f"Service playback started: {track['title']}", "success")
+        except Exception as e:
+            self._console_log(f"Service playback error: {e}", "error")
+
+        GLib.idle_add(self._update_skip_buttons)
+
+    # ── Settings view ────────────────────────────────────────────────
+
+    def _show_services_settings(self):
+        """Show settings for music services."""
+        self._clear_browser_list()
+        self._browser_view = "svc_settings"
+        self._browser_title.set_text("SETTINGS")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        # Browser selection
+        browser_row = Gtk.ListBoxRow()
+        browser_row.set_activatable(False)
+        brow_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        brow_box.set_margin_start(12)
+        brow_box.set_margin_end(12)
+        brow_box.set_margin_top(8)
+        brow_box.set_margin_bottom(8)
+
+        brow_label = Gtk.Label(label="Browser for cookies")
+        brow_label.set_halign(Gtk.Align.START)
+        brow_label.add_css_class("now-playing-title")
+        brow_box.append(brow_label)
+
+        brow_desc = Gtk.Label(label="Used by yt-dlp to access your accounts")
+        brow_desc.set_halign(Gtk.Align.START)
+        brow_desc.add_css_class("dim-label")
+        brow_box.append(brow_desc)
+
+        current_browser = service_ytmusic.get_browser() or "Not set"
+        self._svc_browser_combo = Gtk.DropDown.new_from_strings(
+            ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi"]
+        )
+        # Try to select current
+        browsers = ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi"]
+        try:
+            idx = browsers.index(current_browser)
+            self._svc_browser_combo.set_selected(idx)
+        except ValueError:
+            pass
+        self._svc_browser_combo.connect("notify::selected", self._on_browser_selected)
+        brow_box.append(self._svc_browser_combo)
+
+        browser_row.set_child(brow_box)
+        self._browser_list.append(browser_row)
+
+        # SoundCloud profile URL
+        sc_row = Gtk.ListBoxRow()
+        sc_row.set_activatable(False)
+        sc_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        sc_box.set_margin_start(12)
+        sc_box.set_margin_end(12)
+        sc_box.set_margin_top(8)
+        sc_box.set_margin_bottom(8)
+
+        sc_label = Gtk.Label(label="SoundCloud profile URL")
+        sc_label.set_halign(Gtk.Align.START)
+        sc_label.add_css_class("now-playing-title")
+        sc_box.append(sc_label)
+
+        sc_desc = Gtk.Label(label="e.g. https://soundcloud.com/your-username")
+        sc_desc.set_halign(Gtk.Align.START)
+        sc_desc.add_css_class("dim-label")
+        sc_box.append(sc_desc)
+
+        self._sc_profile_entry = Gtk.Entry()
+        self._sc_profile_entry.set_text(service_soundcloud.get_profile_url())
+        self._sc_profile_entry.set_placeholder_text("https://soundcloud.com/username")
+        self._sc_profile_entry.connect("activate", self._on_sc_profile_saved)
+        sc_box.append(self._sc_profile_entry)
+
+        save_btn = Gtk.Button(label="Save")
+        save_btn.set_halign(Gtk.Align.START)
+        save_btn.set_margin_top(4)
+        save_btn.connect("clicked", self._on_sc_profile_saved)
+        sc_box.append(save_btn)
+
+        sc_row.set_child(sc_box)
+        self._browser_list.append(sc_row)
+
+    def _on_browser_selected(self, dropdown, _pspec):
+        browsers = ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi"]
+        idx = dropdown.get_selected()
+        if 0 <= idx < len(browsers):
+            browser = browsers[idx]
+            service_ytmusic.set_browser(browser)
+            service_soundcloud.set_browser(browser)
+            self._console_log(f"Browser set to: {browser}", "success")
+
+    def _on_sc_profile_saved(self, *_args):
+        url = self._sc_profile_entry.get_text().strip()
+        if url:
+            service_soundcloud.set_profile_url(url)
+            self._console_log(f"SoundCloud profile URL saved: {url}", "success")
 
     # ── Theme ────────────────────────────────────────────────────────
 
@@ -1350,10 +1995,35 @@ class SynosWindow(Adw.ApplicationWindow):
 
     def _play_file_bg(self, speaker, track):
         """Background thread: send play command to Sonos."""
+        url = track.get("url", "")
+
+        # On-demand extraction for service tracks
+        if not url and "_svc_track" in track:
+            svc_track = track["_svc_track"]
+            self._console_log(f"Extracting audio for: {track['title']}", "info")
+            if "video_id" in svc_track:
+                result = service_ytmusic.extract_audio_url(svc_track["video_id"])
+            elif "track_url" in svc_track:
+                result = service_soundcloud.extract_audio_url(svc_track["track_url"])
+            else:
+                result = None
+
+            if result:
+                proxy_id = register_proxy(
+                    result["url"],
+                    headers=result.get("headers"),
+                    content_type=result.get("content_type", "audio/mpeg"),
+                )
+                url = self._audio_server.proxy_url(proxy_id)
+                track["url"] = url
+            else:
+                self._console_log(f"Failed to extract audio: {track['title']}", "error")
+                return
+
         self._console_log(f"Playing: {track['title']}", "info")
-        self._console_log(f"  URL: {track['url']}")
+        self._console_log(f"  URL: {url}")
         try:
-            play_file(speaker, track["url"], title=track["title"])
+            play_file(speaker, url, title=track["title"])
             self._console_log(f"Playback started: {track['title']}", "success")
         except Exception as e:
             self._console_log(f"Playback error: {e}", "error")
