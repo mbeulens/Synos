@@ -2,10 +2,13 @@
 
 import json
 import os
+import threading
 
 from synos.streams import CONFIG_DIR
 
 _PREFS_FILE = os.path.join(CONFIG_DIR, "ytmusic_prefs.json")
+_OAUTH_FILE = os.path.join(CONFIG_DIR, "ytmusic_oauth.json")
+_CREDENTIALS_FILE = os.path.join(CONFIG_DIR, "ytmusic_credentials.json")
 
 # Log callback
 _log = None
@@ -37,21 +40,89 @@ def _save_prefs(prefs):
         json.dump(prefs, f, indent=2)
 
 
+def get_oauth_credentials():
+    """Get OAuth client_id and client_secret from config."""
+    if os.path.exists(_CREDENTIALS_FILE):
+        try:
+            with open(_CREDENTIALS_FILE, "r") as f:
+                creds = json.load(f)
+                return creds.get("client_id", ""), creds.get("client_secret", "")
+        except (json.JSONDecodeError, OSError):
+            pass
+    return "", ""
+
+
+def set_oauth_credentials(client_id, client_secret):
+    """Save OAuth credentials to config."""
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(_CREDENTIALS_FILE, "w") as f:
+        json.dump({"client_id": client_id, "client_secret": client_secret}, f, indent=2)
+
+
 def get_browser():
     """Get the configured browser for cookie extraction."""
     return _load_prefs().get("browser", "")
 
 
 def set_browser(browser):
-    """Set the browser to use for cookie extraction (firefox, chrome, etc.)."""
+    """Set the browser to use for cookie extraction."""
     prefs = _load_prefs()
     prefs["browser"] = browser
     _save_prefs(prefs)
 
 
 def is_configured():
-    """Check if a browser is configured."""
-    return bool(get_browser())
+    """Check if OAuth is configured."""
+    return os.path.exists(_OAUTH_FILE)
+
+
+def is_oauth_authenticated():
+    """Check if we have a valid OAuth token."""
+    return os.path.exists(_OAUTH_FILE)
+
+
+def setup_oauth(callback=None):
+    """Run the OAuth flow in a background thread.
+
+    Opens a browser for Google login. Saves token to disk.
+    callback(success: bool) is called on completion.
+    """
+    _logmsg("YTMusic: Starting OAuth flow...", "info")
+    _logmsg("A browser window will open for Google login", "info")
+
+    def _do_oauth():
+        try:
+            client_id, client_secret = get_oauth_credentials()
+            if not client_id or not client_secret:
+                _logmsg("YTMusic OAuth: No credentials configured. Set them in Settings.", "error")
+                if callback:
+                    callback(False)
+                return
+            from ytmusicapi import setup_oauth as yt_setup_oauth
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            yt_setup_oauth(
+                client_id=client_id,
+                client_secret=client_secret,
+                filepath=_OAUTH_FILE,
+                open_browser=True,
+            )
+            _logmsg("YTMusic OAuth: Authentication successful!", "success")
+            if callback:
+                callback(True)
+        except Exception as e:
+            _logmsg(f"YTMusic OAuth error: {e}", "error")
+            if callback:
+                callback(False)
+
+    threading.Thread(target=_do_oauth, daemon=True).start()
+
+
+def _get_authenticated_yt():
+    """Get an authenticated YTMusic instance."""
+    from ytmusicapi import YTMusic
+    if os.path.exists(_OAUTH_FILE):
+        return YTMusic(_OAUTH_FILE)
+    return YTMusic()
 
 
 def search(query, limit=20):
@@ -94,96 +165,71 @@ def search(query, limit=20):
 
 
 def get_playlists():
-    """Get user's YouTube Music playlists via yt-dlp (requires browser cookies).
+    """Get user's YouTube Music playlists via OAuth.
 
     Returns list of {title, playlist_id, count}.
     """
-    browser = get_browser()
-    if not browser:
-        _logmsg("YTMusic playlists: no browser configured", "error")
+    if not is_oauth_authenticated():
+        _logmsg("YTMusic playlists: not authenticated", "error")
         return []
 
-    _logmsg(f"YTMusic fetching playlists (browser: {browser})", "info")
+    _logmsg("YTMusic fetching playlists (OAuth)", "info")
 
     try:
-        import yt_dlp
-
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": True,
-            "cookiesfrombrowser": (browser,),
-            "extractor_args": {"youtubetab": {"skip": ["authcheck"]}},
-        }
-
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            result = ydl.extract_info(
-                "https://music.youtube.com/library/playlists", download=False
-            )
-
-        playlists = []
-        for entry in result.get("entries", []):
-            playlists.append({
-                "title": entry.get("title", ""),
-                "playlist_id": entry.get("id", ""),
-                "count": entry.get("playlist_count", 0),
-            })
-
-        _logmsg(f"YTMusic found {len(playlists)} playlists", "success")
-        return playlists
-
+        yt = _get_authenticated_yt()
+        playlists = yt.get_library_playlists(limit=50)
     except Exception as e:
         _logmsg(f"YTMusic playlists error: {e}", "error")
         return []
 
+    result = []
+    for pl in playlists:
+        result.append({
+            "title": pl.get("title", ""),
+            "playlist_id": pl.get("playlistId", ""),
+            "count": pl.get("count", 0),
+        })
+
+    _logmsg(f"YTMusic found {len(result)} playlists", "success")
+    return result
+
 
 def get_playlist_tracks(playlist_id):
-    """Get tracks from a YouTube Music playlist via yt-dlp.
+    """Get tracks from a YouTube Music playlist via OAuth.
 
     Returns list of {title, artist, video_id, duration, thumbnail}.
     """
-    browser = get_browser()
     _logmsg(f"YTMusic playlist tracks: {playlist_id}", "info")
 
     try:
-        import yt_dlp
-
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": True,
-        }
-        if browser:
-            opts["cookiesfrombrowser"] = (browser,)
-
-        url = f"https://music.youtube.com/playlist?list={playlist_id}"
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            result = ydl.extract_info(url, download=False)
-
-        tracks = []
-        for entry in result.get("entries", []):
-            vid = entry.get("id")
-            if not vid:
-                continue
-            duration = entry.get("duration")
-            dur_str = ""
-            if duration:
-                duration = int(duration)
-                dur_str = f"{duration // 60}:{duration % 60:02d}"
-            tracks.append({
-                "title": entry.get("title", ""),
-                "artist": entry.get("uploader", ""),
-                "video_id": vid,
-                "duration": dur_str,
-                "thumbnail": "",
-            })
-
-        _logmsg(f"YTMusic playlist has {len(tracks)} tracks", "success")
-        return tracks
-
+        yt = _get_authenticated_yt()
+        playlist = yt.get_playlist(playlist_id, limit=200)
     except Exception as e:
         _logmsg(f"YTMusic playlist error: {e}", "error")
         return []
+
+    tracks = []
+    for item in playlist.get("tracks", []):
+        artists = ", ".join(a["name"] for a in item.get("artists", []) if a)
+        thumbnail = ""
+        thumbs = item.get("thumbnails", [])
+        if thumbs:
+            thumbnail = thumbs[-1].get("url", "")
+
+        vid = item.get("videoId")
+        if not vid:
+            continue
+
+        tracks.append({
+            "title": item.get("title", ""),
+            "artist": artists,
+            "video_id": vid,
+            "duration": item.get("duration", ""),
+            "thumbnail": thumbnail,
+        })
+
+    _logmsg(f"YTMusic playlist has {len(tracks)} tracks", "success")
+    return tracks
 
 
 def extract_audio_url(video_id):
@@ -213,7 +259,6 @@ def extract_audio_url(video_id):
 
         url = info.get("url")
         if not url:
-            # Try formats list
             formats = info.get("formats", [])
             audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
             if audio_fmts:
@@ -225,7 +270,7 @@ def extract_audio_url(video_id):
             return None
 
         headers = info.get("http_headers", {})
-        content_type = "audio/webm"  # YouTube typically serves webm/opus
+        content_type = "audio/webm"
 
         _logmsg(f"YTMusic audio extracted: {url[:80]}...", "success")
         return {"url": url, "headers": headers, "content_type": content_type}

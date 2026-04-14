@@ -1104,10 +1104,10 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_add_btn.set_visible(False)
         self._disconnect_browser_signals()
 
-        if not service_ytmusic.is_configured():
+        if not service_ytmusic.is_oauth_authenticated():
             row = self._make_browser_row(
                 "dialog-warning-symbolic",
-                "Set browser in Settings first",
+                "Connect YouTube Music in Settings first",
                 activatable=False,
             )
             self._browser_list.append(row)
@@ -1718,7 +1718,69 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_add_btn.set_visible(False)
         self._disconnect_browser_signals()
 
-        # Browser selection
+        # ── YouTube Music OAuth ──────────────────────────────────
+        yt_row = Gtk.ListBoxRow()
+        yt_row.set_activatable(False)
+        yt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        yt_box.set_margin_start(12)
+        yt_box.set_margin_end(12)
+        yt_box.set_margin_top(8)
+        yt_box.set_margin_bottom(8)
+
+        yt_label = Gtk.Label(label="YouTube Music")
+        yt_label.set_halign(Gtk.Align.START)
+        yt_label.add_css_class("now-playing-title")
+        yt_box.append(yt_label)
+
+        client_id, client_secret = service_ytmusic.get_oauth_credentials()
+
+        yt_desc = Gtk.Label(label="Google OAuth Client ID")
+        yt_desc.set_halign(Gtk.Align.START)
+        yt_desc.add_css_class("dim-label")
+        yt_box.append(yt_desc)
+
+        self._yt_client_id_entry = Gtk.Entry()
+        self._yt_client_id_entry.set_text(client_id)
+        self._yt_client_id_entry.set_placeholder_text("Client ID")
+        yt_box.append(self._yt_client_id_entry)
+
+        yt_desc2 = Gtk.Label(label="Google OAuth Client Secret")
+        yt_desc2.set_halign(Gtk.Align.START)
+        yt_desc2.add_css_class("dim-label")
+        yt_desc2.set_margin_top(4)
+        yt_box.append(yt_desc2)
+
+        self._yt_client_secret_entry = Gtk.PasswordEntry()
+        self._yt_client_secret_entry.set_text(client_secret)
+        self._yt_client_secret_entry.set_show_peek_icon(True)
+        yt_box.append(self._yt_client_secret_entry)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_margin_top(8)
+
+        save_creds_btn = Gtk.Button(label="Save")
+        save_creds_btn.connect("clicked", self._on_ytmusic_save_creds)
+        btn_box.append(save_creds_btn)
+
+        if service_ytmusic.is_oauth_authenticated():
+            status = Gtk.Label(label="Connected")
+            status.add_css_class("dim-label")
+            btn_box.append(status)
+
+            reconnect_btn = Gtk.Button(label="Reconnect")
+            reconnect_btn.connect("clicked", self._on_ytmusic_connect)
+            btn_box.append(reconnect_btn)
+        else:
+            connect_btn = Gtk.Button(label="Connect")
+            connect_btn.connect("clicked", self._on_ytmusic_connect)
+            btn_box.append(connect_btn)
+
+        yt_box.append(btn_box)
+
+        yt_row.set_child(yt_box)
+        self._browser_list.append(yt_row)
+
+        # ── Browser for yt-dlp ───────────────────────────────────
         browser_row = Gtk.ListBoxRow()
         browser_row.set_activatable(False)
         brow_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -1727,12 +1789,12 @@ class SynosWindow(Adw.ApplicationWindow):
         brow_box.set_margin_top(8)
         brow_box.set_margin_bottom(8)
 
-        brow_label = Gtk.Label(label="Browser for cookies")
+        brow_label = Gtk.Label(label="Browser for playback cookies")
         brow_label.set_halign(Gtk.Align.START)
         brow_label.add_css_class("now-playing-title")
         brow_box.append(brow_label)
 
-        brow_desc = Gtk.Label(label="Used by yt-dlp to access your accounts")
+        brow_desc = Gtk.Label(label="Used by yt-dlp to play age-restricted content")
         brow_desc.set_halign(Gtk.Align.START)
         brow_desc.add_css_class("dim-label")
         brow_box.append(brow_desc)
@@ -1741,7 +1803,6 @@ class SynosWindow(Adw.ApplicationWindow):
         self._svc_browser_combo = Gtk.DropDown.new_from_strings(
             ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi"]
         )
-        # Try to select current
         browsers = ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi"]
         try:
             idx = browsers.index(current_browser)
@@ -1754,6 +1815,7 @@ class SynosWindow(Adw.ApplicationWindow):
         browser_row.set_child(brow_box)
         self._browser_list.append(browser_row)
 
+        # ── SoundCloud ───────────────────────────────────────────
         # SoundCloud profile URL
         sc_row = Gtk.ListBoxRow()
         sc_row.set_activatable(False)
@@ -1787,6 +1849,31 @@ class SynosWindow(Adw.ApplicationWindow):
 
         sc_row.set_child(sc_box)
         self._browser_list.append(sc_row)
+
+    def _on_ytmusic_save_creds(self, _btn):
+        """Save YouTube Music OAuth credentials."""
+        client_id = self._yt_client_id_entry.get_text().strip()
+        client_secret = self._yt_client_secret_entry.get_text().strip()
+        if client_id and client_secret:
+            service_ytmusic.set_oauth_credentials(client_id, client_secret)
+            self._console_log("YouTube Music credentials saved", "success")
+        else:
+            self._console_log("Please enter both Client ID and Client Secret", "error")
+
+    def _on_ytmusic_connect(self, _btn):
+        """Start YouTube Music OAuth flow."""
+        self._console_log("Starting YouTube Music OAuth flow...", "info")
+        self._console_log("A browser will open — log in with your Google account", "info")
+
+        def _on_complete(success):
+            if success:
+                GLib.idle_add(self._console_log, "YouTube Music connected!", "success")
+                # Refresh settings view to show new status
+                GLib.idle_add(self._show_services_settings)
+            else:
+                GLib.idle_add(self._console_log, "YouTube Music connection failed", "error")
+
+        service_ytmusic.setup_oauth(callback=_on_complete)
 
     def _on_browser_selected(self, dropdown, _pspec):
         browsers = ["firefox", "chrome", "chromium", "brave", "edge", "opera", "vivaldi"]
