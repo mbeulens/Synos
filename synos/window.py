@@ -1599,7 +1599,8 @@ class SynosWindow(Adw.ApplicationWindow):
             }])
 
         try:
-            play_file(speaker, proxy_url, title=track["title"])
+            # Use radio scheme for proxied streams to bypass MIME-type sniffing
+            play_stream(speaker, proxy_url, title=track["title"])
             self._console_log(f"Service playback started: {track['title']}", "success")
         except Exception as e:
             self._console_log(f"Service playback error: {e}", "error")
@@ -2074,7 +2075,11 @@ class SynosWindow(Adw.ApplicationWindow):
         self._console_log(f"Playing: {track['title']}", "info")
         self._console_log(f"  URL: {url}")
         try:
-            play_file(speaker, url, title=track["title"])
+            if "_svc_track" in track or "/proxy/" in url:
+                # Service track — use radio scheme to bypass MIME sniffing
+                play_stream(speaker, url, title=track["title"])
+            else:
+                play_file(speaker, url, title=track["title"])
             self._console_log(f"Playback started: {track['title']}", "success")
         except Exception as e:
             self._console_log(f"Playback error: {e}", "error")
