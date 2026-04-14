@@ -1131,8 +1131,33 @@ class SynosWindow(Adw.ApplicationWindow):
         self._svc_playlist_service = "ytmusic"
 
         if not playlists:
-            row = self._make_browser_row("dialog-information-symbolic", "No playlists found", activatable=False)
+            row = self._make_browser_row(
+                "dialog-warning-symbolic",
+                "Could not load playlists",
+                activatable=False,
+            )
             self._browser_list.append(row)
+
+            # Login button
+            login_row = Gtk.ListBoxRow()
+            login_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            login_box.set_margin_start(12)
+            login_box.set_margin_end(12)
+            login_box.set_margin_top(8)
+            login_box.set_margin_bottom(8)
+            login_btn = Gtk.Button(label="Open YouTube Music to login")
+            login_btn.connect("clicked", lambda _: webbrowser.open("https://music.youtube.com"))
+            login_box.append(login_btn)
+            login_row.set_child(login_box)
+            login_row.set_activatable(False)
+            self._browser_list.append(login_row)
+
+            hint = self._make_browser_row(
+                "dialog-information-symbolic",
+                "Login in browser, then retry",
+                activatable=False,
+            )
+            self._browser_list.append(hint)
             return
 
         for pl in playlists:
@@ -1211,8 +1236,33 @@ class SynosWindow(Adw.ApplicationWindow):
         self._svc_playlist_service = "soundcloud"
 
         if not playlists:
-            row = self._make_browser_row("dialog-information-symbolic", "No playlists found", activatable=False)
+            row = self._make_browser_row(
+                "dialog-warning-symbolic",
+                "Could not load playlists",
+                activatable=False,
+            )
             self._browser_list.append(row)
+
+            sc_url = service_soundcloud.get_profile_url() or "https://soundcloud.com"
+            login_row = Gtk.ListBoxRow()
+            login_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            login_box.set_margin_start(12)
+            login_box.set_margin_end(12)
+            login_box.set_margin_top(8)
+            login_box.set_margin_bottom(8)
+            login_btn = Gtk.Button(label="Open SoundCloud to login")
+            login_btn.connect("clicked", lambda _: webbrowser.open(sc_url))
+            login_box.append(login_btn)
+            login_row.set_child(login_box)
+            login_row.set_activatable(False)
+            self._browser_list.append(login_row)
+
+            hint = self._make_browser_row(
+                "dialog-information-symbolic",
+                "Login in browser, then retry",
+                activatable=False,
+            )
+            self._browser_list.append(hint)
             return
 
         for pl in playlists:
@@ -1515,6 +1565,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
         if not result:
             self._console_log(f"Failed to extract audio for: {track['title']}", "error")
+            self._console_log("Try logging into the service in your browser and check Settings", "info")
             return
 
         proxy_id = register_proxy(
