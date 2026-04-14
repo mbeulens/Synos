@@ -628,9 +628,9 @@ class SynosWindow(Adw.ApplicationWindow):
 
         for i, stream in enumerate(self._streams):
             row = Gtk.ListBoxRow()
-            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             row_box.set_margin_start(12)
-            row_box.set_margin_end(4)
+            row_box.set_margin_end(12)
             row_box.set_margin_top(5)
             row_box.set_margin_bottom(5)
 
@@ -643,28 +643,6 @@ class SynosWindow(Adw.ApplicationWindow):
             label.set_hexpand(True)
             label.set_ellipsize(Pango.EllipsizeMode.END)
             row_box.append(label)
-
-            # Move up
-            if i > 0:
-                up_btn = Gtk.Button(icon_name="go-up-symbolic")
-                up_btn.add_css_class("flat")
-                up_btn.set_tooltip_text("Move up")
-                up_btn.connect("clicked", self._on_move_stream, i, -1)
-                row_box.append(up_btn)
-
-            # Move down
-            if i < len(self._streams) - 1:
-                down_btn = Gtk.Button(icon_name="go-down-symbolic")
-                down_btn.add_css_class("flat")
-                down_btn.set_tooltip_text("Move down")
-                down_btn.connect("clicked", self._on_move_stream, i, 1)
-                row_box.append(down_btn)
-
-            remove_btn = Gtk.Button(icon_name="edit-delete-symbolic")
-            remove_btn.add_css_class("flat")
-            remove_btn.set_tooltip_text("Remove stream")
-            remove_btn.connect("clicked", self._on_remove_stream_clicked, i)
-            row_box.append(remove_btn)
 
             # Right-click context menu
             gesture = Gtk.GestureClick(button=3)
@@ -786,12 +764,36 @@ class SynosWindow(Adw.ApplicationWindow):
         """Show context menu on right-click."""
         menu = Gtk.PopoverMenu()
         menu_model = Gio.Menu()
-        menu_model.append("Edit", f"win.edit-stream-{index}")
 
-        # Register action
-        action = Gio.SimpleAction.new(f"edit-stream-{index}", None)
-        action.connect("activate", self._on_edit_stream, index)
-        self.add_action(action)
+        if index > 0:
+            menu_model.append("Move Up", f"win.stream-up-{index}")
+        if index < len(self._streams) - 1:
+            menu_model.append("Move Down", f"win.stream-down-{index}")
+        menu_model.append("Edit", f"win.edit-stream-{index}")
+        menu_model.append("Delete", f"win.delete-stream-{index}")
+
+        # Clean up old actions and register new ones
+        for name in [f"stream-up-{index}", f"stream-down-{index}",
+                     f"edit-stream-{index}", f"delete-stream-{index}"]:
+            if self.lookup_action(name):
+                self.remove_action(name)
+
+        if index > 0:
+            up = Gio.SimpleAction.new(f"stream-up-{index}", None)
+            up.connect("activate", lambda a, p: (self._on_move_stream(None, index, -1)))
+            self.add_action(up)
+        if index < len(self._streams) - 1:
+            down = Gio.SimpleAction.new(f"stream-down-{index}", None)
+            down.connect("activate", lambda a, p: (self._on_move_stream(None, index, 1)))
+            self.add_action(down)
+
+        edit = Gio.SimpleAction.new(f"edit-stream-{index}", None)
+        edit.connect("activate", self._on_edit_stream, index)
+        self.add_action(edit)
+
+        delete = Gio.SimpleAction.new(f"delete-stream-{index}", None)
+        delete.connect("activate", lambda a, p: self._on_remove_stream_clicked(None, index))
+        self.add_action(delete)
 
         menu.set_menu_model(menu_model)
         menu.set_parent(gesture.get_widget())
