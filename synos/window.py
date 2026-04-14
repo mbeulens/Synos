@@ -1568,14 +1568,19 @@ class SynosWindow(Adw.ApplicationWindow):
             self._console_log("Try logging into the service in your browser and check Settings", "info")
             return
 
-        proxy_id = register_proxy(
-            result["url"],
-            headers=result.get("headers"),
-            content_type=result.get("content_type", "audio/mpeg"),
-        )
-        proxy_url = self._audio_server.proxy_url(proxy_id)
-
-        self._console_log(f"Proxy URL: {proxy_url}", "info")
+        # Direct URLs can be played by Sonos without proxy (e.g. SoundCloud MP3)
+        is_direct = result.get("direct", False)
+        if is_direct:
+            play_url = result["url"]
+            self._console_log(f"Direct URL (no proxy): {play_url[:80]}...", "info")
+        else:
+            proxy_id = register_proxy(
+                result["url"],
+                headers=result.get("headers"),
+                content_type=result.get("content_type", "audio/mpeg"),
+            )
+            play_url = self._audio_server.proxy_url(proxy_id)
+            self._console_log(f"Proxy URL: {play_url}", "info")
 
         # Build queue if playlist
         if playlist_tracks:
@@ -1584,23 +1589,26 @@ class SynosWindow(Adw.ApplicationWindow):
                 items.append({
                     "name": t["title"],
                     "title": t["title"],
-                    "url": "",  # Will be extracted on-demand
-                    "_svc_track": t,  # Store original track for extraction
+                    "url": "",
+                    "_svc_track": t,
+                    "_svc_direct": is_direct,
                 })
-            # Set the current track's URL
-            items[start_index]["url"] = proxy_url
+            items[start_index]["url"] = play_url
             self._queue.set_queue(items, start_index=start_index)
         else:
             self._queue.set_queue([{
                 "name": track["title"],
                 "title": track["title"],
-                "url": proxy_url,
+                "url": play_url,
                 "_svc_track": track,
+                "_svc_direct": is_direct,
             }])
 
         try:
-            # Use radio scheme for proxied streams to bypass MIME-type sniffing
-            play_stream(speaker, proxy_url, title=track["title"])
+            if is_direct:
+                play_file(speaker, play_url, title=track["title"])
+            else:
+                play_stream(speaker, play_url, title=track["title"])
             self._console_log(f"Service playback started: {track['title']}", "success")
         except Exception as e:
             self._console_log(f"Service playback error: {e}", "error")
@@ -2061,25 +2069,31 @@ class SynosWindow(Adw.ApplicationWindow):
                 result = None
 
             if result:
-                proxy_id = register_proxy(
-                    result["url"],
-                    headers=result.get("headers"),
-                    content_type=result.get("content_type", "audio/mpeg"),
-                )
-                url = self._audio_server.proxy_url(proxy_id)
+                is_direct = result.get("direct", False)
+                if is_direct:
+                    url = result["url"]
+                else:
+                    proxy_id = register_proxy(
+                        result["url"],
+                        headers=result.get("headers"),
+                        content_type=result.get("content_type", "audio/mpeg"),
+                    )
+                    url = self._audio_server.proxy_url(proxy_id)
                 track["url"] = url
+                track["_svc_direct"] = is_direct
             else:
                 self._console_log(f"Failed to extract audio: {track['title']}", "error")
+                self._console_log("Try logging into the service in your browser and check Settings", "info")
                 return
 
         self._console_log(f"Playing: {track['title']}", "info")
         self._console_log(f"  URL: {url}")
         try:
-            if "_svc_track" in track or "/proxy/" in url:
-                # Service track — use radio scheme to bypass MIME sniffing
-                play_stream(speaker, url, title=track["title"])
-            else:
+            is_direct = track.get("_svc_direct", False)
+            if is_direct or ("_svc_track" not in track and "/proxy/" not in url):
                 play_file(speaker, url, title=track["title"])
+            else:
+                play_stream(speaker, url, title=track["title"])
             self._console_log(f"Playback started: {track['title']}", "success")
         except Exception as e:
             self._console_log(f"Playback error: {e}", "error")

@@ -210,8 +210,9 @@ def extract_audio_url(track_url):
     try:
         import yt_dlp
 
+        # Prefer http_mp3 format — Sonos handles it natively with seek support
         opts = {
-            "format": "bestaudio/best",
+            "format": "http_mp3_1_0/bestaudio/best",
             "quiet": True,
             "no_warnings": True,
         }
@@ -234,10 +235,13 @@ def extract_audio_url(track_url):
             return None
 
         headers = info.get("http_headers", {})
-        content_type = "audio/mpeg"
+        ext = info.get("ext", "")
+        content_type = "audio/mpeg" if ext == "mp3" else "audio/mp4"
+        # SoundCloud http_mp3 URLs can be played directly by Sonos (no proxy needed)
+        direct = "http_mp3" in (info.get("format_id") or "")
 
-        _logmsg(f"SoundCloud audio extracted: {url[:80]}...", "success")
-        return {"url": url, "headers": headers, "content_type": content_type}
+        _logmsg(f"SoundCloud audio extracted (direct={direct}): {url[:80]}...", "success")
+        return {"url": url, "headers": headers, "content_type": content_type, "direct": direct}
 
     except Exception as e:
         _logmsg(f"SoundCloud extract error: {e}", "error")
