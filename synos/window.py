@@ -1066,6 +1066,12 @@ class SynosWindow(Adw.ApplicationWindow):
             label.set_tooltip_text(filename)
             row_box.append(label)
 
+            # Double-click to play
+            file_idx = len(files) - len(files) + files.index(filename)
+            dbl = Gtk.GestureClick(button=1)
+            dbl.connect("pressed", self._on_library_file_dbl_click, file_idx)
+            row.add_controller(dbl)
+
             row.set_child(row_box)
             self._browser_list.append(row)
 
@@ -1102,33 +1108,29 @@ class SynosWindow(Adw.ApplicationWindow):
             self._show_library_files_view(idx)
 
     def _on_library_file_activated(self, _listbox, row):
+        """Single-click: Play All and subfolder navigation only."""
         idx = row.get_index()
-        top_rows = self._files_top_rows
         files = self._current_files
         subdirs = self._current_subdirs
         has_play_all = len(files) > 0
 
-        # Determine what was clicked
         if has_play_all and idx == 0:
-            # Play All
             if self._active_speaker:
                 self._play_folder_files(files, start_index=0)
             return
 
-        # Offset past Play All row
         adjusted = idx - (1 if has_play_all else 0)
-
         if adjusted < len(subdirs):
-            # Subfolder clicked — navigate into it
             subdir = subdirs[adjusted]
             new_rel = os.path.join(self._current_subfolder_rel, subdir) if self._current_subfolder_rel else subdir
             self._show_library_files_view(self._current_folder_index, subfolder_rel=new_rel)
-            return
 
-        # Audio file clicked
-        file_index = adjusted - len(subdirs)
-        if self._active_speaker and 0 <= file_index < len(files):
-            self._play_folder_files(files, start_index=file_index)
+    def _on_library_file_dbl_click(self, gesture, n_press, x, y, file_index):
+        """Double-click to play a file and queue the folder from that point."""
+        if n_press != 2:
+            return
+        if self._active_speaker and 0 <= file_index < len(self._current_files):
+            self._play_folder_files(self._current_files, start_index=file_index)
 
     def _play_folder_files(self, files, start_index=0):
         """Build queue from files in current folder path and start playing."""
@@ -1536,6 +1538,13 @@ class SynosWindow(Adw.ApplicationWindow):
                 info_box.append(sub_label)
 
             row_box.append(info_box)
+
+            # Double-click to play
+            track_idx = tracks.index(track)
+            dbl = Gtk.GestureClick(button=1)
+            dbl.connect("pressed", self._on_svc_track_dbl_click, track_idx)
+            row.add_controller(dbl)
+
             row.set_child(row_box)
             self._browser_list.append(row)
 
@@ -1716,20 +1725,20 @@ class SynosWindow(Adw.ApplicationWindow):
                 info_box.append(sub_label)
 
             row_box.append(info_box)
+
+            # Double-click to play
+            dbl = Gtk.GestureClick(button=1)
+            result_idx = len(self._svc_search_results) - len(results) + results.index(track)
+            dbl.connect("pressed", self._on_svc_search_dbl_click, result_idx)
+            row.add_controller(dbl)
+
             row.set_child(row_box)
             self._browser_list.append(row)
 
-        try:
-            self._browser_list.disconnect_by_func(self._on_svc_search_activated)
-        except TypeError:
-            pass
-        self._browser_list.connect("row-activated", self._on_svc_search_activated)
-
-    def _on_svc_search_activated(self, _listbox, row):
-        idx = row.get_index()
-        if idx == 0:  # search bar row
+    def _on_svc_search_dbl_click(self, gesture, n_press, x, y, result_idx):
+        """Double-click to play a search result."""
+        if n_press != 2:
             return
-        result_idx = idx - 1
         if result_idx < 0 or result_idx >= len(self._svc_search_results):
             return
         track = self._svc_search_results[result_idx]
@@ -1820,21 +1829,31 @@ class SynosWindow(Adw.ApplicationWindow):
                 info_box.append(sub_label)
 
             row_box.append(info_box)
+
+            # Double-click to play
+            track_idx = tracks.index(track)
+            dbl = Gtk.GestureClick(button=1)
+            dbl.connect("pressed", self._on_svc_track_dbl_click, track_idx)
+            row.add_controller(dbl)
+
             row.set_child(row_box)
             self._browser_list.append(row)
 
         self._browser_list.connect("row-activated", self._on_svc_playlist_track_activated)
 
     def _on_svc_playlist_track_activated(self, _listbox, row):
+        """Single-click: Play All only."""
         idx = row.get_index()
-        tracks = self._svc_playlist_tracks
-
         if idx == 0:
-            # Play All — queue all tracks starting from first
-            self._play_service_playlist(tracks, start_index=0)
-        elif idx > 0 and idx - 1 < len(tracks):
-            # Play from this track, queue the rest
-            self._play_service_playlist(tracks, start_index=idx - 1)
+            self._play_service_playlist(self._svc_playlist_tracks, start_index=0)
+
+    def _on_svc_track_dbl_click(self, gesture, n_press, x, y, track_idx):
+        """Double-click to play a track and queue from that point."""
+        if n_press != 2:
+            return
+        tracks = self._svc_playlist_tracks
+        if 0 <= track_idx < len(tracks):
+            self._play_service_playlist(tracks, start_index=track_idx)
 
     # ── Shared: Play service track ───────────────────────────────────
 
