@@ -94,6 +94,58 @@ def search(query, limit=20):
         return []
 
 
+def get_user_tracks(profile_url=None):
+    """Get user's uploaded SoundCloud tracks.
+
+    Returns list of {title, artist, duration, track_url}.
+    """
+    if not profile_url:
+        prefs = _load_prefs()
+        profile_url = prefs.get("profile_url", "")
+
+    if not profile_url:
+        _logmsg("SoundCloud: no profile URL configured", "error")
+        return []
+
+    tracks_url = f"{profile_url.rstrip('/')}/tracks"
+    _logmsg(f"SoundCloud fetching user tracks: {tracks_url}", "info")
+    browser = get_browser()
+
+    try:
+        import yt_dlp
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+        }
+        if browser:
+            opts["cookiesfrombrowser"] = (browser,)
+
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            result = ydl.extract_info(tracks_url, download=False)
+
+        tracks = []
+        for entry in result.get("entries", []):
+            title = entry.get("title", "")
+            track_url = entry.get("url") or entry.get("webpage_url", "")
+            if not title and track_url:
+                title = track_url.rstrip("/").split("/")[-1].replace("-", " ").title()
+            tracks.append({
+                "title": title,
+                "artist": entry.get("uploader", ""),
+                "duration": _format_duration(entry.get("duration")),
+                "track_url": track_url,
+            })
+
+        _logmsg(f"SoundCloud found {len(tracks)} user tracks", "success")
+        return tracks
+
+    except Exception as e:
+        _logmsg(f"SoundCloud user tracks error: {e}", "error")
+        return []
+
+
 def get_user_playlists(profile_url=None):
     """Get user's SoundCloud playlists/sets.
 

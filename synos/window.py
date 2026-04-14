@@ -670,7 +670,7 @@ class SynosWindow(Adw.ApplicationWindow):
                 self._show_ytmusic_playlists_view()
             else:
                 self._show_services_view()
-        elif self._browser_view in ("svc_sc_search", "svc_sc_playlists", "svc_sc_playlist_tracks"):
+        elif self._browser_view in ("svc_sc_search", "svc_sc_playlists", "svc_sc_tracks", "svc_sc_playlist_tracks"):
             if self._browser_view == "svc_sc_playlist_tracks":
                 self._show_sc_playlists_view()
             else:
@@ -1173,7 +1173,7 @@ class SynosWindow(Adw.ApplicationWindow):
     # ── SoundCloud ───────────────────────────────────────────────────
 
     def _show_sc_menu(self):
-        """Show SoundCloud options: Search, Playlists."""
+        """Show SoundCloud options: Search, My Tracks, Playlists."""
         self._clear_browser_list()
         self._browser_view = "svc_sc"
         self._browser_title.set_text("SOUNDCLOUD")
@@ -1183,6 +1183,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
         items = [
             ("system-search-symbolic", "Search"),
+            ("audio-x-generic-symbolic", "My Tracks"),
             ("view-list-symbolic", "My Playlists"),
         ]
         for icon_name, label_text in items:
@@ -1199,7 +1200,98 @@ class SynosWindow(Adw.ApplicationWindow):
         if idx == 0:
             self._show_svc_search_view("soundcloud")
         elif idx == 1:
+            self._show_sc_tracks_view()
+        elif idx == 2:
             self._show_sc_playlists_view()
+
+    def _show_sc_tracks_view(self):
+        """Show user's uploaded SoundCloud tracks."""
+        self._clear_browser_list()
+        self._browser_view = "svc_sc_tracks"
+        self._browser_title.set_text("MY TRACKS")
+        self._browser_back_btn.set_visible(True)
+        self._browser_add_btn.set_visible(False)
+        self._disconnect_browser_signals()
+
+        if not service_soundcloud.get_profile_url():
+            row = self._make_browser_row(
+                "dialog-warning-symbolic",
+                "Set profile URL in Settings first",
+                activatable=False,
+            )
+            self._browser_list.append(row)
+            return
+
+        loading = self._make_browser_row("content-loading-symbolic", "Loading tracks...", activatable=False)
+        self._browser_list.append(loading)
+
+        def _fetch():
+            tracks = service_soundcloud.get_user_tracks()
+            GLib.idle_add(self._populate_sc_tracks, tracks)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _populate_sc_tracks(self, tracks):
+        if self._browser_view != "svc_sc_tracks":
+            return
+        self._clear_browser_list()
+        self._svc_playlist_tracks = tracks
+        self._svc_playlist_service = "soundcloud"
+
+        if not tracks:
+            row = self._make_browser_row("dialog-information-symbolic", "No tracks found", activatable=False)
+            self._browser_list.append(row)
+            return
+
+        # Play All row
+        play_all_row = Gtk.ListBoxRow()
+        pa_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pa_box.set_margin_start(12)
+        pa_box.set_margin_end(12)
+        pa_box.set_margin_top(6)
+        pa_box.set_margin_bottom(6)
+        pa_icon = Gtk.Image(icon_name="media-playback-start-symbolic")
+        pa_icon.set_pixel_size(16)
+        pa_box.append(pa_icon)
+        pa_label = Gtk.Label(label=f"Play All ({len(tracks)} tracks)")
+        pa_label.set_halign(Gtk.Align.START)
+        pa_label.add_css_class("now-playing-title")
+        pa_box.append(pa_label)
+        play_all_row.set_child(pa_box)
+        self._browser_list.append(play_all_row)
+
+        for track in tracks:
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(12)
+            row_box.set_margin_end(12)
+            row_box.set_margin_top(4)
+            row_box.set_margin_bottom(4)
+
+            icon = Gtk.Image(icon_name="audio-x-generic-symbolic")
+            icon.set_pixel_size(16)
+            row_box.append(icon)
+
+            info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            info_box.set_hexpand(True)
+
+            title_label = Gtk.Label(label=track["title"])
+            title_label.set_halign(Gtk.Align.START)
+            title_label.set_ellipsize(Pango.EllipsizeMode.END)
+            info_box.append(title_label)
+
+            duration = track.get("duration", "")
+            if duration:
+                sub_label = Gtk.Label(label=duration)
+                sub_label.set_halign(Gtk.Align.START)
+                sub_label.add_css_class("dim-label")
+                info_box.append(sub_label)
+
+            row_box.append(info_box)
+            row.set_child(row_box)
+            self._browser_list.append(row)
+
+        self._browser_list.connect("row-activated", self._on_svc_playlist_track_activated)
 
     def _show_sc_playlists_view(self):
         """Show user's SoundCloud playlists."""
