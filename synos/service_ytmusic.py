@@ -303,18 +303,16 @@ def extract_audio_url(video_id):
     try:
         import yt_dlp
 
+        # Don't use browser cookies for extraction — they cause signature
+        # solving failures. Public YouTube videos work without cookies.
         opts = {
             "format": "bestaudio/best",
             "quiet": True,
             "no_warnings": True,
         }
-        if browser:
-            opts["cookiesfrombrowser"] = (browser,)
 
-        # Try YouTube Music URL first, fall back to regular YouTube
         urls_to_try = [
             f"https://www.youtube.com/watch?v={video_id}",
-            f"https://music.youtube.com/watch?v={video_id}",
         ]
         info = None
         for try_url in urls_to_try:
