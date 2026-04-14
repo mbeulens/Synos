@@ -49,3 +49,22 @@ def remove_stream(index):
         streams.pop(index)
         save_streams(streams)
     return streams
+
+
+def edit_stream(index, name, url):
+    """Edit a stream's name and URL."""
+    streams = load_streams()
+    if 0 <= index < len(streams):
+        streams[index] = {"name": name, "url": url}
+        save_streams(streams)
+    return streams
+
+
+def move_stream(index, direction):
+    """Move a stream up (-1) or down (+1)."""
+    streams = load_streams()
+    new_index = index + direction
+    if 0 <= index < len(streams) and 0 <= new_index < len(streams):
+        streams[index], streams[new_index] = streams[new_index], streams[index]
+        save_streams(streams)
+    return streams

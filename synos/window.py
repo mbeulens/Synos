@@ -12,11 +12,11 @@ import threading
 import webbrowser
 from urllib.parse import quote_plus
 
-from gi.repository import Adw, Gtk, GLib, Gdk, GdkPixbuf, Pango
+from gi.repository import Adw, Gtk, GLib, Gdk, GdkPixbuf, Gio, Pango
 
 from synos import __version__
 from synos.sonos_client import discover_speakers, play_stream, play_file, get_transport_state
-from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
+from synos.streams import load_streams, add_stream, remove_stream, edit_stream, move_stream, CONFIG_DIR
 from synos.vumeter import VuMeter
 from synos.albumart import fetch_album_art, set_log_callback as set_art_log
 from synos.playqueue import PlayQueue
@@ -628,7 +628,7 @@ class SynosWindow(Adw.ApplicationWindow):
 
         for i, stream in enumerate(self._streams):
             row = Gtk.ListBoxRow()
-            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
             row_box.set_margin_start(12)
             row_box.set_margin_end(4)
             row_box.set_margin_top(5)
@@ -644,11 +644,32 @@ class SynosWindow(Adw.ApplicationWindow):
             label.set_ellipsize(Pango.EllipsizeMode.END)
             row_box.append(label)
 
+            # Move up
+            if i > 0:
+                up_btn = Gtk.Button(icon_name="go-up-symbolic")
+                up_btn.add_css_class("flat")
+                up_btn.set_tooltip_text("Move up")
+                up_btn.connect("clicked", self._on_move_stream, i, -1)
+                row_box.append(up_btn)
+
+            # Move down
+            if i < len(self._streams) - 1:
+                down_btn = Gtk.Button(icon_name="go-down-symbolic")
+                down_btn.add_css_class("flat")
+                down_btn.set_tooltip_text("Move down")
+                down_btn.connect("clicked", self._on_move_stream, i, 1)
+                row_box.append(down_btn)
+
             remove_btn = Gtk.Button(icon_name="edit-delete-symbolic")
             remove_btn.add_css_class("flat")
             remove_btn.set_tooltip_text("Remove stream")
             remove_btn.connect("clicked", self._on_remove_stream_clicked, i)
             row_box.append(remove_btn)
+
+            # Right-click context menu
+            gesture = Gtk.GestureClick(button=3)
+            gesture.connect("pressed", self._on_stream_right_click, i)
+            row.add_controller(gesture)
 
             row.set_child(row_box)
             self._browser_list.append(row)
@@ -665,16 +686,16 @@ class SynosWindow(Adw.ApplicationWindow):
                     self._show_library_files_view(self._current_folder_index)
             else:
                 self._show_library_folders_view()
-        elif self._browser_view in ("svc_ytmusic_search", "svc_ytmusic_playlists", "svc_ytmusic_playlist_tracks"):
-            if self._browser_view == "svc_ytmusic_playlist_tracks":
-                self._show_ytmusic_playlists_view()
-            else:
-                self._show_services_view()
-        elif self._browser_view in ("svc_sc_search", "svc_sc_playlists", "svc_sc_tracks", "svc_sc_playlist_tracks"):
-            if self._browser_view == "svc_sc_playlist_tracks":
-                self._show_sc_playlists_view()
-            else:
-                self._show_services_view()
+        elif self._browser_view in ("svc_ytmusic", "svc_sc", "svc_settings"):
+            self._show_services_view()
+        elif self._browser_view in ("svc_ytmusic_search", "svc_ytmusic_playlists"):
+            self._show_ytmusic_menu()
+        elif self._browser_view == "svc_ytmusic_playlist_tracks":
+            self._show_ytmusic_playlists_view()
+        elif self._browser_view in ("svc_sc_search", "svc_sc_playlists", "svc_sc_tracks"):
+            self._show_sc_menu()
+        elif self._browser_view == "svc_sc_playlist_tracks":
+            self._show_sc_playlists_view()
         elif self._browser_view == "svc_settings":
             self._show_services_view()
         else:
@@ -755,6 +776,62 @@ class SynosWindow(Adw.ApplicationWindow):
     def _on_remove_stream_response(self, dialog, response, index):
         if response == "remove":
             remove_stream(index)
+            self._show_streams_view()
+
+    def _on_move_stream(self, _btn, index, direction):
+        move_stream(index, direction)
+        self._show_streams_view()
+
+    def _on_stream_right_click(self, gesture, n_press, x, y, index):
+        """Show context menu on right-click."""
+        menu = Gtk.PopoverMenu()
+        menu_model = Gio.Menu()
+        menu_model.append("Edit", f"win.edit-stream-{index}")
+
+        # Register action
+        action = Gio.SimpleAction.new(f"edit-stream-{index}", None)
+        action.connect("activate", self._on_edit_stream, index)
+        self.add_action(action)
+
+        menu.set_menu_model(menu_model)
+        menu.set_parent(gesture.get_widget())
+        menu.set_pointing_to(Gdk.Rectangle())
+        menu.popup()
+
+    def _on_edit_stream(self, action, param, index):
+        """Show edit dialog for a stream."""
+        stream = self._streams[index]
+        dialog = Adw.AlertDialog(
+            heading="Edit Stream",
+            body="Edit the stream name and URL.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("save", "Save")
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        name_entry = Gtk.Entry()
+        name_entry.set_text(stream["name"])
+        content.append(name_entry)
+
+        url_entry = Gtk.Entry()
+        url_entry.set_text(stream["url"])
+        content.append(url_entry)
+
+        dialog.set_extra_child(content)
+        dialog.connect("response", self._on_edit_stream_response, index, name_entry, url_entry)
+        dialog.present(self)
+
+    def _on_edit_stream_response(self, dialog, response, index, name_entry, url_entry):
+        if response != "save":
+            return
+        name = name_entry.get_text().strip()
+        url = url_entry.get_text().strip()
+        if name and url:
+            edit_stream(index, name, url)
             self._show_streams_view()
 
     # ── Music Library views ──────────────────────────────────────────
