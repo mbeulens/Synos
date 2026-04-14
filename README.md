@@ -23,8 +23,8 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 - **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
 - **Non-blocking UI** — All playback and network calls run in background threads
 - **Keyboard Shortcuts** — Space (play/pause), F12 (console), Arrow Up/Down (volume)
-- **YouTube Music** — Search songs, add playlists, download & play as MP3 with auto-skip
-- **SoundCloud** — Search, My Tracks, My Playlists with direct MP3 playback
+- **YouTube Music** — Search songs, add playlists, download & play as MP3 with auto-skip and video thumbnails
+- **SoundCloud** — Search, My Tracks, My Playlists with direct MP3 playback and thumbnails
 
 ## Supported Audio Formats
 
