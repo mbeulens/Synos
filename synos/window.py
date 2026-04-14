@@ -1101,7 +1101,21 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_view = "svc_ytmusic_playlists"
         self._browser_title.set_text("MY PLAYLISTS")
         self._browser_back_btn.set_visible(True)
-        self._browser_add_btn.set_visible(False)
+        self._browser_add_btn.set_visible(True)
+        self._browser_add_btn.set_tooltip_text("Add playlist")
+        try:
+            self._browser_add_btn.disconnect_by_func(self._on_add_stream_clicked)
+        except TypeError:
+            pass
+        try:
+            self._browser_add_btn.disconnect_by_func(self._on_add_folder_clicked)
+        except TypeError:
+            pass
+        try:
+            self._browser_add_btn.disconnect_by_func(self._on_add_ytmusic_playlist_clicked)
+        except TypeError:
+            pass
+        self._browser_add_btn.connect("clicked", self._on_add_ytmusic_playlist_clicked)
         self._disconnect_browser_signals()
 
         if not service_ytmusic.get_browser():
@@ -1160,15 +1174,82 @@ class SynosWindow(Adw.ApplicationWindow):
             self._browser_list.append(hint)
             return
 
-        for pl in playlists:
+        for i, pl in enumerate(playlists):
             count = f" ({pl['count']})" if pl.get("count") else ""
-            row = self._make_browser_row("view-list-symbolic", f"{pl['title']}{count}")
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row_box.set_margin_start(12)
+            row_box.set_margin_end(4)
+            row_box.set_margin_top(5)
+            row_box.set_margin_bottom(5)
+
+            icon = Gtk.Image(icon_name="view-list-symbolic")
+            icon.set_pixel_size(16)
+            row_box.append(icon)
+
+            label = Gtk.Label(label=f"{pl['title']}{count}")
+            label.set_halign(Gtk.Align.START)
+            label.set_hexpand(True)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            row_box.append(label)
+
+            # Remove button for user-added playlists (index > 0)
+            if i > 0:
+                remove_btn = Gtk.Button(icon_name="edit-delete-symbolic")
+                remove_btn.add_css_class("flat")
+                remove_btn.set_tooltip_text("Remove playlist")
+                remove_btn.connect("clicked", self._on_remove_ytmusic_playlist, i)
+                row_box.append(remove_btn)
+
             arrow = Gtk.Image(icon_name="go-next-symbolic")
             arrow.set_opacity(0.5)
-            row.get_child().append(arrow)
+            row_box.append(arrow)
+
+            row.set_child(row_box)
             self._browser_list.append(row)
 
         self._browser_list.connect("row-activated", self._on_svc_playlist_activated)
+
+    def _on_add_ytmusic_playlist_clicked(self, _btn):
+        dialog = Adw.AlertDialog(
+            heading="Add YouTube Music Playlist",
+            body="Paste a playlist URL or ID from YouTube Music.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("add", "Add")
+        dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        content.set_margin_start(12)
+        content.set_margin_end(12)
+
+        name_entry = Gtk.Entry()
+        name_entry.set_placeholder_text("Playlist name")
+        content.append(name_entry)
+
+        url_entry = Gtk.Entry()
+        url_entry.set_placeholder_text("URL or playlist ID")
+        content.append(url_entry)
+
+        dialog.set_extra_child(content)
+        dialog.connect("response", self._on_add_ytmusic_playlist_response, name_entry, url_entry)
+        dialog.present(self)
+
+    def _on_add_ytmusic_playlist_response(self, dialog, response, name_entry, url_entry):
+        if response != "add":
+            return
+        name = name_entry.get_text().strip()
+        url_or_id = url_entry.get_text().strip()
+        if name and url_or_id:
+            playlist_id = service_ytmusic.extract_playlist_id(url_or_id)
+            service_ytmusic.add_playlist(name, playlist_id)
+            self._console_log(f"Added YTMusic playlist: {name} ({playlist_id})", "success")
+            self._show_ytmusic_playlists_view()
+
+    def _on_remove_ytmusic_playlist(self, _btn, index):
+        service_ytmusic.remove_playlist(index)
+        self._console_log("Removed YTMusic playlist", "info")
+        self._show_ytmusic_playlists_view()
 
     # ── SoundCloud ───────────────────────────────────────────────────
 

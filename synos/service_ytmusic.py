@@ -198,18 +198,64 @@ def search(query, limit=20):
     return tracks
 
 
-def get_playlists():
-    """Get user's YouTube Music playlists via yt-dlp with browser cookies."""
-    browser = get_browser()
-    if not browser:
-        _logmsg("YTMusic playlists: no browser configured", "error")
-        return []
+_PLAYLISTS_FILE = os.path.join(CONFIG_DIR, "ytmusic_playlists.json")
 
-    _logmsg(f"YTMusic fetching playlists (browser: {browser})", "info")
+
+def _load_saved_playlists():
+    if os.path.exists(_PLAYLISTS_FILE):
+        try:
+            with open(_PLAYLISTS_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return []
+
+
+def _save_playlists(playlists):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(_PLAYLISTS_FILE, "w") as f:
+        json.dump(playlists, f, indent=2)
+
+
+def add_playlist(title, playlist_id):
+    """Add a user playlist by title and ID."""
+    playlists = _load_saved_playlists()
+    # Don't add duplicates
+    if not any(p["playlist_id"] == playlist_id for p in playlists):
+        playlists.append({"title": title, "playlist_id": playlist_id, "count": 0})
+        _save_playlists(playlists)
+    return get_playlists()
+
+
+def remove_playlist(index):
+    """Remove a user-added playlist by index (offset past built-in ones)."""
+    playlists = _load_saved_playlists()
+    adj = index - 1  # offset past "Liked Music"
+    if 0 <= adj < len(playlists):
+        playlists.pop(adj)
+        _save_playlists(playlists)
+    return get_playlists()
+
+
+def extract_playlist_id(url_or_id):
+    """Extract playlist ID from a YouTube Music URL or raw ID."""
+    import re
+    # Try to extract from URL
+    match = re.search(r"[?&]list=([A-Za-z0-9_-]+)", url_or_id)
+    if match:
+        return match.group(1)
+    # Might be a raw ID
+    return url_or_id.strip()
+
+
+def get_playlists():
+    """Get YouTube Music playlists — built-in + user-added."""
+    _logmsg("YTMusic fetching playlists", "info")
 
     playlists = [
         {"title": "Liked Music", "playlist_id": "LM", "count": 0},
     ]
+    playlists.extend(_load_saved_playlists())
 
     _logmsg(f"YTMusic returning {len(playlists)} playlists", "success")
     return playlists
