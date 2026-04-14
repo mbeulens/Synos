@@ -171,9 +171,11 @@ def setup_oauth(callback=None):
 
 def _get_authenticated_yt():
     """Get an authenticated YTMusic instance."""
-    from ytmusicapi import YTMusic
+    from ytmusicapi import YTMusic, OAuthCredentials
     if os.path.exists(_OAUTH_FILE):
-        return YTMusic(_OAUTH_FILE)
+        client_id, client_secret = get_oauth_credentials()
+        oauth_creds = OAuthCredentials(client_id, client_secret)
+        return YTMusic(_OAUTH_FILE, oauth_credentials=oauth_creds)
     return YTMusic()
 
 
