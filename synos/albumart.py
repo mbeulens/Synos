@@ -49,6 +49,18 @@ def _ensure_cache_dir():
     os.makedirs(_CACHE_DIR, exist_ok=True)
 
 
+def _clean_artist_variants(artist):
+    """Generate artist variants: original, then first artist if multi-artist."""
+    if not artist:
+        return [""]
+    variants = [artist]
+    # Split on comma, slash, &, "feat.", "ft."
+    first = re.split(r"[,/&]|\bfeat\.?\b|\bft\.?\b", artist, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    if first and first != artist:
+        variants.append(first)
+    return variants
+
+
 def _clean_title_variants(artist, title):
     """Generate up to 3 cleaned title variants for retry.
 
@@ -105,18 +117,30 @@ def fetch_album_art(artist, title):
 
     _logmsg(f"Art cache miss, fetching: {artist} - {title}", "info")
 
-    # Try cleaned title variants
-    variants = _clean_title_variants(artist, title)
-    image_data = None
+    # Build list of (artist, title) pairs to try
+    title_variants = _clean_title_variants(artist, title)
+    artist_variants = _clean_artist_variants(artist)
 
-    for i, variant in enumerate(variants):
-        attempt = f"[attempt {i + 1}/{len(variants)}]"
-        _logmsg(f"  {attempt} title: \"{variant}\"", "info")
-        image_data = _lookup(artist, variant)
+    attempts = []
+    seen = set()
+    for a in artist_variants:
+        for t in title_variants:
+            pair = (a, t)
+            if pair not in seen:
+                seen.add(pair)
+                attempts.append(pair)
+    # Cap at 3 attempts
+    attempts = attempts[:3]
+
+    image_data = None
+    for i, (a, t) in enumerate(attempts):
+        label = f"[attempt {i + 1}/{len(attempts)}]"
+        _logmsg(f"  {label} artist: \"{a}\", title: \"{t}\"", "info")
+        image_data = _lookup(a, t)
         if image_data:
-            _logmsg(f"  {attempt} Found art!", "success")
+            _logmsg(f"  {label} Found art!", "success")
             break
-        _logmsg(f"  {attempt} No art found")
+        _logmsg(f"  {label} No art found")
 
     # Write to disk cache
     _ensure_cache_dir()
