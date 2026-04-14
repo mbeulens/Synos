@@ -1703,10 +1703,8 @@ class SynosWindow(Adw.ApplicationWindow):
             }])
 
         try:
-            if is_direct:
-                play_file(speaker, play_url, title=track["title"])
-            else:
-                play_stream(speaker, play_url, title=track["title"])
+            # Proxied URLs are now cached files — use play_file for all
+            play_file(speaker, play_url, title=track["title"])
             self._console_log(f"Service playback started: {track['title']}", "success")
         except Exception as e:
             self._console_log(f"Service playback error: {e}", "error")

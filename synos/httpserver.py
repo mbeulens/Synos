@@ -109,7 +109,7 @@ class _AudioHandler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
 
     def _handle_proxy(self, path):
-        """Proxy a remote audio stream."""
+        """Proxy a remote audio stream — download to cache then serve."""
         proxy_id = path.strip("/").split("/", 1)[1] if "/" in path[1:] else ""
 
         with _proxy_lock:
@@ -123,39 +123,56 @@ class _AudioHandler(BaseHTTPRequestHandler):
         url = entry["url"]
         headers = entry["headers"]
         content_type = entry["content_type"]
+        cache_path = entry.get("cache_path")
 
-        _logmsg(f"Proxy streaming: {proxy_id}")
-        _logmsg(f"  Remote URL: {url[:100]}...")
+        # Download to temp file if not already cached
+        if not cache_path or not os.path.exists(cache_path):
+            _logmsg(f"Proxy downloading: {proxy_id}")
+            _logmsg(f"  Remote URL: {url[:100]}...")
+            try:
+                import tempfile
+                resp = http_requests.get(url, headers=headers, stream=True, timeout=60)
+                if resp.status_code != 200:
+                    _logmsg(f"Proxy upstream error: {resp.status_code}", "error")
+                    self.send_error(502)
+                    return
 
-        try:
-            resp = http_requests.get(url, headers=headers, stream=True, timeout=30)
-            if resp.status_code != 200:
-                _logmsg(f"Proxy upstream error: {resp.status_code}", "error")
-                self.send_error(502)
+                fd, cache_path = tempfile.mkstemp(suffix=".audio")
+                with os.fdopen(fd, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=65536):
+                        if chunk:
+                            f.write(chunk)
+
+                with _proxy_lock:
+                    entry["cache_path"] = cache_path
+                _logmsg(f"Proxy cached: {cache_path} ({os.path.getsize(cache_path)} bytes)", "success")
+
+            except Exception as e:
+                _logmsg(f"Proxy download error: {e}", "error")
+                try:
+                    self.send_error(502)
+                except Exception:
+                    pass
                 return
 
-            # Use upstream content type if available
-            upstream_ct = resp.headers.get("Content-Type", content_type)
-            content_length = resp.headers.get("Content-Length")
-
+        # Serve the cached file
+        try:
+            file_size = os.path.getsize(cache_path)
             self.send_response(200)
-            self.send_header("Content-Type", upstream_ct)
-            if content_length:
-                self.send_header("Content-Length", content_length)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(file_size))
+            self.send_header("Accept-Ranges", "bytes")
             self.end_headers()
 
-            for chunk in resp.iter_content(chunk_size=65536):
-                if chunk:
+            with open(cache_path, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
                     self.wfile.write(chunk)
 
-            _logmsg(f"Proxy complete: {proxy_id}", "success")
-
         except Exception as e:
-            _logmsg(f"Proxy error: {e}", "error")
-            try:
-                self.send_error(502)
-            except Exception:
-                pass
+            _logmsg(f"Proxy serve error: {e}", "error")
 
     def log_message(self, format, *args):
         pass
