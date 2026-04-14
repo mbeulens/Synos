@@ -94,7 +94,7 @@ def search(query, limit=20):
 
 
 def get_playlists():
-    """Get user's YouTube Music playlists (requires browser cookies).
+    """Get user's YouTube Music playlists via yt-dlp (requires browser cookies).
 
     Returns list of {title, playlist_id, count}.
     """
@@ -106,27 +106,38 @@ def get_playlists():
     _logmsg(f"YTMusic fetching playlists (browser: {browser})", "info")
 
     try:
-        from ytmusicapi import YTMusic
-        yt = YTMusic.from_cookies(browser)
-        playlists = yt.get_library_playlists(limit=50)
+        import yt_dlp
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "cookiesfrombrowser": (browser,),
+        }
+
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            result = ydl.extract_info(
+                "https://music.youtube.com/library/playlists", download=False
+            )
+
+        playlists = []
+        for entry in result.get("entries", []):
+            playlists.append({
+                "title": entry.get("title", ""),
+                "playlist_id": entry.get("id", ""),
+                "count": entry.get("playlist_count", 0),
+            })
+
+        _logmsg(f"YTMusic found {len(playlists)} playlists", "success")
+        return playlists
+
     except Exception as e:
         _logmsg(f"YTMusic playlists error: {e}", "error")
         return []
 
-    result = []
-    for pl in playlists:
-        result.append({
-            "title": pl.get("title", ""),
-            "playlist_id": pl.get("playlistId", ""),
-            "count": pl.get("count", 0),
-        })
-
-    _logmsg(f"YTMusic found {len(result)} playlists", "success")
-    return result
-
 
 def get_playlist_tracks(playlist_id):
-    """Get tracks from a YouTube Music playlist.
+    """Get tracks from a YouTube Music playlist via yt-dlp.
 
     Returns list of {title, artist, video_id, duration, thumbnail}.
     """
@@ -134,38 +145,44 @@ def get_playlist_tracks(playlist_id):
     _logmsg(f"YTMusic playlist tracks: {playlist_id}", "info")
 
     try:
-        from ytmusicapi import YTMusic
+        import yt_dlp
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+        }
         if browser:
-            yt = YTMusic.from_cookies(browser)
-        else:
-            yt = YTMusic()
-        playlist = yt.get_playlist(playlist_id, limit=200)
+            opts["cookiesfrombrowser"] = (browser,)
+
+        url = f"https://music.youtube.com/playlist?list={playlist_id}"
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            result = ydl.extract_info(url, download=False)
+
+        tracks = []
+        for entry in result.get("entries", []):
+            vid = entry.get("id")
+            if not vid:
+                continue
+            duration = entry.get("duration")
+            dur_str = ""
+            if duration:
+                duration = int(duration)
+                dur_str = f"{duration // 60}:{duration % 60:02d}"
+            tracks.append({
+                "title": entry.get("title", ""),
+                "artist": entry.get("uploader", ""),
+                "video_id": vid,
+                "duration": dur_str,
+                "thumbnail": "",
+            })
+
+        _logmsg(f"YTMusic playlist has {len(tracks)} tracks", "success")
+        return tracks
+
     except Exception as e:
         _logmsg(f"YTMusic playlist error: {e}", "error")
         return []
-
-    tracks = []
-    for item in playlist.get("tracks", []):
-        artists = ", ".join(a["name"] for a in item.get("artists", []) if a)
-        thumbnail = ""
-        thumbs = item.get("thumbnails", [])
-        if thumbs:
-            thumbnail = thumbs[-1].get("url", "")
-
-        vid = item.get("videoId")
-        if not vid:
-            continue
-
-        tracks.append({
-            "title": item.get("title", ""),
-            "artist": artists,
-            "video_id": vid,
-            "duration": item.get("duration", ""),
-            "thumbnail": thumbnail,
-        })
-
-    _logmsg(f"YTMusic playlist has {len(tracks)} tracks", "success")
-    return tracks
 
 
 def extract_audio_url(video_id):
