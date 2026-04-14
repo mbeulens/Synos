@@ -157,7 +157,7 @@ def get_playlist_tracks(playlist_url):
         opts = {
             "quiet": True,
             "no_warnings": True,
-            "extract_flat": True,
+            "extract_flat": "in_playlist",
         }
         if browser:
             opts["cookiesfrombrowser"] = (browser,)
@@ -167,11 +167,16 @@ def get_playlist_tracks(playlist_url):
 
         tracks = []
         for entry in result.get("entries", []):
+            title = entry.get("title", "")
+            track_url = entry.get("url") or entry.get("webpage_url", "")
+            # If flat extraction didn't give us a title, use the URL slug
+            if not title and track_url:
+                title = track_url.rstrip("/").split("/")[-1].replace("-", " ").title()
             tracks.append({
-                "title": entry.get("title", ""),
+                "title": title,
                 "artist": entry.get("uploader", ""),
                 "duration": _format_duration(entry.get("duration")),
-                "track_url": entry.get("url", ""),
+                "track_url": track_url,
             })
 
         _logmsg(f"SoundCloud playlist has {len(tracks)} tracks", "success")
