@@ -2656,6 +2656,21 @@ class SynosWindow(Adw.ApplicationWindow):
         if image_data and self._current_art_key == art_key:
             GLib.idle_add(self._set_album_art_image, image_data)
 
+    def _fetch_thumbnail_bg(self, url, art_key):
+        """Background thread: fetch thumbnail from URL and update UI."""
+        import requests as http_req
+        self._console_log(f"Fetching thumbnail: {url[:80]}...", "info")
+        try:
+            resp = http_req.get(url, timeout=5)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                if self._current_art_key == art_key:
+                    self._console_log(f"Thumbnail loaded ({len(resp.content)} bytes)", "success")
+                    GLib.idle_add(self._set_album_art_image, resp.content)
+            else:
+                self._console_log(f"Thumbnail failed: HTTP {resp.status_code}", "error")
+        except Exception as e:
+            self._console_log(f"Thumbnail error: {e}", "error")
+
     # ── Now Playing polling ──────────────────────────────────────────
 
     def _start_polling(self):
@@ -2776,11 +2791,23 @@ class SynosWindow(Adw.ApplicationWindow):
                 if art_key != self._current_art_key and is_real_track:
                     self._current_art_key = art_key
                     self._reset_album_art()
-                    threading.Thread(
-                        target=self._fetch_art_bg,
-                        args=(artist, display_title, art_key),
-                        daemon=True,
-                    ).start()
+                    # Check if current queue track has a thumbnail URL
+                    thumbnail_url = ""
+                    current = self._queue.current
+                    if current and "_svc_track" in current:
+                        thumbnail_url = current["_svc_track"].get("thumbnail", "")
+                    if thumbnail_url:
+                        threading.Thread(
+                            target=self._fetch_thumbnail_bg,
+                            args=(thumbnail_url, art_key),
+                            daemon=True,
+                        ).start()
+                    else:
+                        threading.Thread(
+                            target=self._fetch_art_bg,
+                            args=(artist, display_title, art_key),
+                            daemon=True,
+                        ).start()
 
                 # Update seek slider (skip if user is dragging)
                 if dur_secs > 0:

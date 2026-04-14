@@ -297,7 +297,7 @@ def get_playlist_tracks(playlist_id):
                 "artist": entry.get("uploader", ""),
                 "video_id": vid,
                 "duration": dur_str,
-                "thumbnail": "",
+                "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
             })
 
         _logmsg(f"YTMusic playlist has {len(tracks)} tracks", "success")
