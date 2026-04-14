@@ -113,6 +113,7 @@ def get_playlists():
             "no_warnings": True,
             "extract_flat": True,
             "cookiesfrombrowser": (browser,),
+            "extractor_args": {"youtubetab": {"skip": ["authcheck"]}},
         }
 
         with yt_dlp.YoutubeDL(opts) as ydl:
