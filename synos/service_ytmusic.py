@@ -319,11 +319,13 @@ def extract_audio_url(video_id):
         info = None
         for try_url in urls_to_try:
             try:
+                _logmsg(f"  Trying: {try_url}")
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(try_url, download=False)
                 if info:
                     break
-            except Exception:
+            except Exception as e:
+                _logmsg(f"  Failed: {str(e)[:150]}", "error")
                 continue
 
         if not info:
