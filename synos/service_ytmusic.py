@@ -304,18 +304,31 @@ def extract_audio_url(video_id):
         import yt_dlp
 
         opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio/bestvideo+bestaudio/best",
             "quiet": True,
             "no_warnings": True,
         }
         if browser:
             opts["cookiesfrombrowser"] = (browser,)
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(
-                f"https://music.youtube.com/watch?v={video_id}",
-                download=False,
-            )
+        # Try YouTube Music URL first, fall back to regular YouTube
+        urls_to_try = [
+            f"https://www.youtube.com/watch?v={video_id}",
+            f"https://music.youtube.com/watch?v={video_id}",
+        ]
+        info = None
+        for try_url in urls_to_try:
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(try_url, download=False)
+                if info:
+                    break
+            except Exception:
+                continue
+
+        if not info:
+            _logmsg("YTMusic: could not extract info from any URL", "error")
+            return None
 
         url = info.get("url")
         if not url:
