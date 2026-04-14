@@ -117,9 +117,12 @@ def fetch_album_art(artist, title):
 
     _logmsg(f"Art cache miss, fetching: {artist} - {title}", "info")
 
-    # Build list of (artist, title) pairs to try
+    # Build list of (artist, title) pairs to try (max 5)
     title_variants = _clean_title_variants(artist, title)
     artist_variants = _clean_artist_variants(artist)
+    # Add empty artist as final fallback
+    if "" not in artist_variants:
+        artist_variants.append("")
 
     attempts = []
     seen = set()
@@ -129,8 +132,7 @@ def fetch_album_art(artist, title):
             if pair not in seen:
                 seen.add(pair)
                 attempts.append(pair)
-    # Cap at 3 attempts
-    attempts = attempts[:3]
+    attempts = attempts[:5]
 
     image_data = None
     for i, (a, t) in enumerate(attempts):
