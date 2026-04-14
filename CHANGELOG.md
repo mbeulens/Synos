@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.8.0 — Minor release
+
+### New Features
+- **Music Services** — YouTube Music and SoundCloud integration
+  - **YouTube Music**: Search songs via ytmusicapi
+  - **SoundCloud**: Search tracks, browse My Tracks (uploaded songs), browse My Playlists/Sets
+  - Play All and play-from-track for playlists and uploaded tracks
+  - On-demand audio extraction via yt-dlp with browser cookie auth
+  - SoundCloud direct MP3 playback with full seek slider support
+  - Login buttons with browser redirect when authentication fails
+- **Media Proxy** — Local HTTP server proxies audio streams for formats Sonos can't fetch directly
+- **Settings page** — Configure browser for cookie auth, SoundCloud profile URL
+
+### Technical
+- New dependencies: `yt-dlp`, `ytmusicapi`, `secretstorage`
+- Proxy registry with chunked streaming
+- Service tracks support on-demand extraction for prev/next queue navigation
+
 ## v1.6.0 — Minor release
 
 ### New Features

@@ -23,6 +23,7 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 - **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
 - **Non-blocking UI** — All playback and network calls run in background threads
 - **Keyboard Shortcuts** — Space (play/pause), F12 (console), Arrow Up/Down (volume)
+- **Music Services** — YouTube Music search, SoundCloud search/tracks/playlists via yt-dlp
 
 ## Supported Audio Formats
 
@@ -39,7 +40,7 @@ sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
 ### Python packages
 
 ```bash
-pip install soco
+pip install soco yt-dlp ytmusicapi secretstorage
 ```
 
 ## Running
