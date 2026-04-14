@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.2 — Patch release
+
+### Improvements
+- **Album art lookup** — Prioritize Digital Media releases over physical formats (CD, Vinyl) for better Cover Art Archive hit rate
+- **Album art lookup** — Deduplicate releases across recordings to avoid redundant CAA requests
+
+### Bug Fixes
+- Fixed `NameError` on `variants` when no art was found (should be `attempts`)
+
 ## v2.1.0 — Minor release
 
 ### Improvements

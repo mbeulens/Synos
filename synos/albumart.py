@@ -152,9 +152,34 @@ def fetch_album_art(artist, title):
     if image_data:
         _logmsg(f"Art cached ({len(image_data)} bytes): {artist} - {title}", "success")
     else:
-        _logmsg(f"Art not found after {len(variants)} attempts, cached negative: {artist} - {title}")
+        _logmsg(f"Art not found after {len(attempts)} attempts, cached negative: {artist} - {title}")
 
     return image_data
+
+
+def _collect_releases(recordings):
+    """Collect unique releases from recordings, prioritizing Digital Media."""
+    seen = set()
+    digital = []
+    other = []
+    for recording in recordings:
+        for release in recording.get("releases", []):
+            release_id = release.get("id")
+            if not release_id or release_id in seen:
+                continue
+            seen.add(release_id)
+            release_title = release.get("title", "?")
+            # Check if any media entry is Digital Media
+            media = release.get("media", [])
+            is_digital = any(
+                m.get("format", "").lower() == "digital media" for m in media
+            )
+            entry = (release_id, release_title, is_digital)
+            if is_digital:
+                digital.append(entry)
+            else:
+                other.append(entry)
+    return digital + other
 
 
 def _lookup(artist, title):
@@ -180,17 +205,13 @@ def _lookup(artist, title):
         recordings = data.get("recordings", [])
         _logmsg(f"  Found {len(recordings)} recording(s)")
 
-        for recording in recordings:
-            releases = recording.get("releases", [])
-            for release in releases:
-                release_id = release.get("id")
-                release_title = release.get("title", "?")
-                if not release_id:
-                    continue
-                _logmsg(f"  Trying release: {release_title} ({release_id})")
-                art = _fetch_cover(release_id)
-                if art:
-                    return art
+        releases = _collect_releases(recordings)
+        for release_id, release_title, is_digital in releases:
+            fmt_tag = " [Digital Media]" if is_digital else ""
+            _logmsg(f"  Trying release: {release_title} ({release_id}){fmt_tag}")
+            art = _fetch_cover(release_id)
+            if art:
+                return art
 
     except requests.RequestException as e:
         _logmsg(f"  MusicBrainz request error: {e}", "error")
