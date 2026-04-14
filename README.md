@@ -23,7 +23,8 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 - **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
 - **Non-blocking UI** — All playback and network calls run in background threads
 - **Keyboard Shortcuts** — Space (play/pause), F12 (console), Arrow Up/Down (volume)
-- **Music Services** — YouTube Music search, SoundCloud search/tracks/playlists via yt-dlp
+- **YouTube Music** — Search songs, add playlists, download & play as MP3 with auto-skip
+- **SoundCloud** — Search, My Tracks, My Playlists with direct MP3 playback
 
 ## Supported Audio Formats
 
@@ -41,6 +42,7 @@ sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
 
 ```bash
 pip install soco yt-dlp ytmusicapi secretstorage
+sudo apt install ffmpeg nodejs
 ```
 
 ## Running
@@ -83,6 +85,10 @@ All settings are stored in `~/.config/synos/`:
 - `library.json` — Music library folder paths
 - `preferences.json` — Theme preference (dark/light)
 - `artcache/` — Cached album art images
+- `ytcache/` — Downloaded YouTube audio (MP3)
+- `ytmusic_playlists.json` — Saved YouTube Music playlist IDs
+- `ytmusic_credentials.json` — Google OAuth credentials
+- `soundcloud_prefs.json` — SoundCloud settings
 
 ## License
 
