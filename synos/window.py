@@ -49,6 +49,12 @@ CSS = """
     font-size: 11px;
     opacity: 0.55;
 }
+.drop-above {
+    border-top: 2px solid @accent_color;
+}
+.drop-below {
+    border-bottom: 2px solid @accent_color;
+}
 .disc-art {
     background-color: alpha(@window_fg_color, 0.08);
     border-radius: 999px;
@@ -663,6 +669,9 @@ class SynosWindow(Adw.ApplicationWindow):
             # Drop target
             drop = Gtk.DropTarget.new(GObject.TYPE_INT, Gdk.DragAction.MOVE)
             drop.connect("drop", self._on_stream_drop, i)
+            drop.connect("enter", self._on_stream_drag_enter)
+            drop.connect("motion", self._on_stream_drag_motion)
+            drop.connect("leave", self._on_stream_drag_leave)
             row.add_controller(drop)
 
             row.set_child(row_box)
@@ -801,11 +810,43 @@ class SynosWindow(Adw.ApplicationWindow):
         content = Gdk.ContentProvider.new_for_value(index)
         return content
 
+    def _on_stream_drag_enter(self, drop_target, x, y):
+        return Gdk.DragAction.MOVE
+
+    def _on_stream_drag_motion(self, drop_target, x, y):
+        widget = drop_target.get_widget()
+        height = widget.get_height()
+        widget.remove_css_class("drop-above")
+        widget.remove_css_class("drop-below")
+        if y < height / 2:
+            widget.add_css_class("drop-above")
+        else:
+            widget.add_css_class("drop-below")
+        return Gdk.DragAction.MOVE
+
+    def _on_stream_drag_leave(self, drop_target):
+        widget = drop_target.get_widget()
+        widget.remove_css_class("drop-above")
+        widget.remove_css_class("drop-below")
+
     def _on_stream_drop(self, drop_target, value, x, y, target_index):
         """Handle drop — reorder streams."""
+        # Clean up CSS
+        widget = drop_target.get_widget()
+        widget.remove_css_class("drop-above")
+        widget.remove_css_class("drop-below")
+
         source_index = value
         if source_index == target_index:
             return False
+
+        # Adjust target based on drop position (above/below midpoint)
+        height = widget.get_height()
+        if y >= height / 2 and target_index < source_index:
+            target_index += 1
+        elif y < height / 2 and target_index > source_index:
+            target_index -= 1
+
         streams = load_streams()
         if 0 <= source_index < len(streams) and 0 <= target_index < len(streams):
             item = streams.pop(source_index)
