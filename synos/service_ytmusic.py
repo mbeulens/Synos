@@ -129,12 +129,22 @@ def setup_oauth(callback=None):
                 time.sleep(interval)
                 try:
                     raw_token = credentials.token_from_code(device_code)
+                    # Check if response is an error
+                    if isinstance(raw_token, dict) and "error" in raw_token:
+                        error = raw_token["error"]
+                        if error in ("authorization_pending", "slow_down"):
+                            continue
+                        else:
+                            _logmsg(f"YTMusic OAuth poll error: {error}", "error")
+                            raise Exception(error)
                     # Success — save token
                     os.makedirs(CONFIG_DIR, exist_ok=True)
-                    ref_token = RefreshingToken(credentials=credentials, **raw_token)
+                    # Filter out unexpected keys
+                    token_keys = {"access_token", "refresh_token", "token_type", "expires_in", "expires_at", "scope"}
+                    clean_token = {k: v for k, v in raw_token.items() if k in token_keys}
+                    ref_token = RefreshingToken(credentials=credentials, **clean_token)
                     ref_token.update(ref_token.as_dict())
                     ref_token.local_cache = Path(_OAUTH_FILE)
-                    # Force save
                     ref_token.store_token()
                     _logmsg("YTMusic OAuth: Authentication successful!", "success")
                     if callback:
