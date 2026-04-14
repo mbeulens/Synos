@@ -20,7 +20,7 @@ from synos.streams import load_streams, add_stream, remove_stream, CONFIG_DIR
 from synos.vumeter import VuMeter
 from synos.albumart import fetch_album_art, set_log_callback as set_art_log
 from synos.playqueue import PlayQueue
-from synos.httpserver import AudioServer
+from synos.httpserver import AudioServer, set_log_callback as set_http_log
 from synos.library import (
     load_library_folders, add_library_folder, remove_library_folder, scan_folder,
 )
@@ -265,6 +265,7 @@ class SynosWindow(Adw.ApplicationWindow):
         # Console pane
         self._console_pane = self._build_console()
         set_art_log(self._console_log)
+        set_http_log(self._console_log)
         self._main_vpaned.set_end_child(self._console_pane)
         self._main_vpaned.set_shrink_end_child(False)
         self._main_vpaned.set_resize_end_child(False)

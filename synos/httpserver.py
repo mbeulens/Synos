@@ -1,12 +1,13 @@
-"""Local HTTP server to serve audio files to Sonos speakers."""
+"""Local HTTP server to serve audio files and proxy streams to Sonos."""
 
 import mimetypes
 import os
 import socket
 import threading
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import quote, unquote
 
+import requests as http_requests
 
 # Ensure audio MIME types are registered
 mimetypes.add_type("audio/flac", ".flac")
@@ -15,40 +16,148 @@ mimetypes.add_type("audio/aac", ".aac")
 mimetypes.add_type("audio/mp4", ".m4a")
 mimetypes.add_type("audio/x-ms-wma", ".wma")
 
+# Log callback — set by the window
+_log = None
 
-class _AudioHandler(SimpleHTTPRequestHandler):
-    """Serves files from a list of allowed directories."""
+
+def set_log_callback(callback):
+    global _log
+    _log = callback
+
+
+def _logmsg(msg, tag=None):
+    if _log:
+        _log(msg, tag)
+
+
+# Proxy registry: proxy_id -> {url, headers, content_type}
+_proxy_registry = {}
+_proxy_lock = threading.Lock()
+_proxy_counter = 0
+
+
+def register_proxy(audio_url, headers=None, content_type="audio/mpeg"):
+    """Register a URL for proxying. Returns a proxy ID."""
+    global _proxy_counter
+    with _proxy_lock:
+        _proxy_counter += 1
+        proxy_id = str(_proxy_counter)
+        _proxy_registry[proxy_id] = {
+            "url": audio_url,
+            "headers": headers or {},
+            "content_type": content_type,
+        }
+    return proxy_id
+
+
+class _AudioHandler(BaseHTTPRequestHandler):
+    """Serves local files and proxies remote audio streams."""
 
     allowed_dirs = []
 
-    def translate_path(self, path):
-        """Map URL path to a real file path within allowed dirs."""
-        # URL format: /dir_index/relative/path/to/file.mp3
-        path = unquote(path)
+    def do_GET(self):
+        path = unquote(self.path)
+
+        if path.startswith("/proxy/"):
+            self._handle_proxy(path)
+        else:
+            self._handle_file(path)
+
+    def _handle_file(self, path):
+        """Serve a local file from allowed directories."""
         parts = path.strip("/").split("/", 1)
         if len(parts) < 2:
-            return ""
+            self.send_error(404)
+            return
 
         try:
             dir_idx = int(parts[0])
         except ValueError:
-            return ""
+            self.send_error(404)
+            return
 
         if dir_idx < 0 or dir_idx >= len(self.allowed_dirs):
-            return ""
+            self.send_error(404)
+            return
 
         base = self.allowed_dirs[dir_idx]
         rel = parts[1]
         full = os.path.normpath(os.path.join(base, rel))
 
-        # Prevent directory traversal
         if not full.startswith(os.path.normpath(base)):
-            return ""
+            self.send_error(403)
+            return
 
-        return full
+        if not os.path.isfile(full):
+            self.send_error(404)
+            return
+
+        content_type, _ = mimetypes.guess_type(full)
+        content_type = content_type or "application/octet-stream"
+        file_size = os.path.getsize(full)
+
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(file_size))
+        self.end_headers()
+
+        with open(full, "rb") as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
+    def _handle_proxy(self, path):
+        """Proxy a remote audio stream."""
+        proxy_id = path.strip("/").split("/", 1)[1] if "/" in path[1:] else ""
+
+        with _proxy_lock:
+            entry = _proxy_registry.get(proxy_id)
+
+        if not entry:
+            _logmsg(f"Proxy 404: unknown proxy ID {proxy_id}", "error")
+            self.send_error(404)
+            return
+
+        url = entry["url"]
+        headers = entry["headers"]
+        content_type = entry["content_type"]
+
+        _logmsg(f"Proxy streaming: {proxy_id}")
+        _logmsg(f"  Remote URL: {url[:100]}...")
+
+        try:
+            resp = http_requests.get(url, headers=headers, stream=True, timeout=30)
+            if resp.status_code != 200:
+                _logmsg(f"Proxy upstream error: {resp.status_code}", "error")
+                self.send_error(502)
+                return
+
+            # Use upstream content type if available
+            upstream_ct = resp.headers.get("Content-Type", content_type)
+            content_length = resp.headers.get("Content-Length")
+
+            self.send_response(200)
+            self.send_header("Content-Type", upstream_ct)
+            if content_length:
+                self.send_header("Content-Length", content_length)
+            self.end_headers()
+
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    self.wfile.write(chunk)
+
+            _logmsg(f"Proxy complete: {proxy_id}", "success")
+
+        except Exception as e:
+            _logmsg(f"Proxy error: {e}", "error")
+            try:
+                self.send_error(502)
+            except Exception:
+                pass
 
     def log_message(self, format, *args):
-        # Silence request logging
         pass
 
 
@@ -65,7 +174,7 @@ def _get_local_ip():
 
 
 class AudioServer:
-    """Manages a background HTTP server for serving audio files."""
+    """Manages a background HTTP server for serving audio files and proxying streams."""
 
     def __init__(self):
         self._server = None
@@ -106,3 +215,7 @@ class AudioServer:
         """Get the HTTP URL for a file in a given library directory."""
         encoded = quote(relative_path)
         return f"http://{self._host}:{self._port}/{dir_index}/{encoded}"
+
+    def proxy_url(self, proxy_id):
+        """Get the HTTP URL for a proxied stream."""
+        return f"http://{self._host}:{self._port}/proxy/{proxy_id}"
