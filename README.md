@@ -13,13 +13,15 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 - **Play Queue** — Play single tracks or entire folders, with prev/next navigation
 - **Auto-Advance** — Automatically plays the next track when the current one finishes
 - **Seek Slider** — Draggable position slider for local files with duration display
+- **Album Art** — Automatic cover art from MusicBrainz/Cover Art Archive with disk cache and smart retry
 - **Equalizer** — Bass, treble, and loudness controls per speaker
 - **Now Playing** — Live track info with title, artist, and stream name
 - **YouTube / Discogs Search** — Search current track on YouTube or Discogs with one click
 - **VU Meter** — Animated 32-bar visualizer with peak hold
+- **Console Log** — Collapsible log window with timestamped, color-coded entries
 - **Light/Dark Mode** — Toggle with persistent preference
 - **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
-- **Non-blocking UI** — All playback calls run in background threads
+- **Non-blocking UI** — All playback and network calls run in background threads
 
 ## Supported Audio Formats
 
@@ -56,14 +58,14 @@ Name=Synos
 Comment=Sonos controller for Linux
 Exec=python3 -m synos
 Path=/path/to/Synos
-Icon=audio-speakers-symbolic
+Icon=/path/to/Synos/synos.svg
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;GTK;
 Keywords=sonos;music;speaker;stream;
 ```
 
-Update `Path=` to your Synos directory, then run:
+Update `Path=` and `Icon=` to your Synos directory, then run:
 
 ```bash
 update-desktop-database ~/.local/share/applications/
@@ -78,6 +80,7 @@ All settings are stored in `~/.config/synos/`:
 - `streams.json` — Saved internet radio streams
 - `library.json` — Music library folder paths
 - `preferences.json` — Theme preference (dark/light)
+- `artcache/` — Cached album art images
 
 ## License
 

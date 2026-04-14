@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.5.0 — Minor release
+
+### New Features
+- **Album Art** — Fetches cover art from MusicBrainz + Cover Art Archive
+  - Background thread fetch, UI stays responsive
+  - Persistent disk cache in `~/.config/synos/artcache/`
+  - Smart retry: tries up to 3 cleaned title variants (strips track numbers, artist prefix, mix tags)
+  - Resets to disc icon immediately on track change
+- **Console Log** — Collapsible log window at the bottom of the app
+  - Toggle via terminal icon in headerbar
+  - Logs speaker discovery, playback, streams, album art, EQ, seek, auto-advance
+  - Timestamped, color-coded (info/success/error), max 500 lines, newest first
+  - Clear and close buttons in console header
+  - Detailed album art logging: cache hits/misses, MusicBrainz queries, CAA requests, URLs
+
+### UI Changes
+- Theme and console toggle buttons moved to left side of headerbar (after transport controls)
+
 ## v1.2.0 — Minor release
 
 ### New Features
