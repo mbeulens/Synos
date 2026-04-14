@@ -78,8 +78,52 @@ class SynosWindow(Adw.ApplicationWindow):
 
         self._load_css()
         self._build_ui()
+        self._setup_keybindings()
         self._start_discovery()
         self._start_audio_server()
+
+    # ── Keybindings ──────────────────────────────────────────────────
+
+    def _setup_keybindings(self):
+        ctrl = Gtk.EventControllerKey()
+        ctrl.connect("key-pressed", self._on_key_pressed)
+        self.add_controller(ctrl)
+
+    def _on_key_pressed(self, controller, keyval, keycode, state):
+        from gi.repository import Gdk as _Gdk
+
+        if keyval == _Gdk.KEY_space:
+            # Toggle play/pause
+            if self._active_speaker:
+                try:
+                    transport = get_transport_state(self._active_speaker)
+                    if transport == "PLAYING":
+                        self._active_speaker.pause()
+                    else:
+                        self._active_speaker.play()
+                except Exception:
+                    pass
+            return True
+
+        if keyval == _Gdk.KEY_F12:
+            self._on_toggle_console()
+            return True
+
+        if keyval == _Gdk.KEY_Up:
+            if self._active_speaker:
+                vol = min(100, self._active_speaker.volume + 2)
+                self._active_speaker.volume = vol
+                self._volume_scale.set_value(vol)
+            return True
+
+        if keyval == _Gdk.KEY_Down:
+            if self._active_speaker:
+                vol = max(0, self._active_speaker.volume - 2)
+                self._active_speaker.volume = vol
+                self._volume_scale.set_value(vol)
+            return True
+
+        return False
 
     # ── CSS ──────────────────────────────────────────────────────────
 
