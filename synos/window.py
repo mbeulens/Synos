@@ -1607,17 +1607,22 @@ class SynosWindow(Adw.ApplicationWindow):
                 if display_title:
                     self._room_now_playing.set_text(f"  {display_title}")
 
-                # Fetch album art on track change
+                # Fetch album art on track change (skip Sonos internal states)
+                _IGNORE_TITLES = {"zpstr_buffering", "zpstr_connecting", "zpstr_enqueued", "x-sonosapi-stream"}
                 art_key = (artist.lower(), (display_title or "").lower())
-                if art_key != self._current_art_key:
+                is_real_track = (
+                    has_track
+                    and art_key[1] not in _IGNORE_TITLES
+                    and not art_key[1].startswith("x-")
+                )
+                if art_key != self._current_art_key and is_real_track:
                     self._current_art_key = art_key
                     self._reset_album_art()
-                    if has_track:
-                        threading.Thread(
-                            target=self._fetch_art_bg,
-                            args=(artist, display_title, art_key),
-                            daemon=True,
-                        ).start()
+                    threading.Thread(
+                        target=self._fetch_art_bg,
+                        args=(artist, display_title, art_key),
+                        daemon=True,
+                    ).start()
 
                 # Update seek slider (skip if user is dragging)
                 if dur_secs > 0:
