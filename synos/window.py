@@ -1656,8 +1656,14 @@ class SynosWindow(Adw.ApplicationWindow):
             return
 
         if not result:
-            self._console_log(f"Failed to extract audio for: {track['title']}", "error")
-            self._console_log("Try logging into the service in your browser and check Settings", "info")
+            self._console_log(f"Skipping unavailable: {track['title']}", "error")
+            # Auto-skip to next track
+            if self._queue.has_next:
+                next_track = self._queue.next()
+                if next_track:
+                    self._console_log(f"Auto-skipping to: {next_track['title']}", "info")
+                    GLib.idle_add(self._play_queue_track, next_track)
+                    GLib.idle_add(self._update_skip_buttons)
             return
 
         # Direct URLs can be played by Sonos without proxy (e.g. SoundCloud MP3)
@@ -2261,8 +2267,14 @@ class SynosWindow(Adw.ApplicationWindow):
                 track["url"] = url
                 track["_svc_direct"] = is_direct
             else:
-                self._console_log(f"Failed to extract audio: {track['title']}", "error")
-                self._console_log("Try logging into the service in your browser and check Settings", "info")
+                self._console_log(f"Skipping unavailable: {track['title']}", "error")
+                # Auto-skip to next track
+                if self._queue.has_next:
+                    next_track = self._queue.next()
+                    if next_track:
+                        self._console_log(f"Auto-skipping to: {next_track['title']}", "info")
+                        GLib.idle_add(self._play_queue_track, next_track)
+                        GLib.idle_add(self._update_skip_buttons)
                 return
 
         self._console_log(f"Playing: {track['title']}", "info")
