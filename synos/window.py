@@ -1666,9 +1666,22 @@ class SynosWindow(Adw.ApplicationWindow):
                     GLib.idle_add(self._update_skip_buttons)
             return
 
-        # Direct URLs can be played by Sonos without proxy (e.g. SoundCloud MP3)
+        # Handle local files (downloaded by yt-dlp) — serve via HTTP server
         is_direct = result.get("direct", False)
-        if is_direct:
+        if result.get("local_file"):
+            file_path = result["url"]
+            file_dir = os.path.dirname(file_path)
+            file_name = os.path.basename(file_path)
+            # Add dir to server if not already
+            dirs = list(self._audio_server._dirs)
+            if file_dir not in dirs:
+                dirs.append(file_dir)
+                self._audio_server.set_dirs(dirs)
+            dir_idx = dirs.index(file_dir)
+            play_url = self._audio_server.file_url(dir_idx, file_name)
+            is_direct = True
+            self._console_log(f"Local file URL: {play_url}", "info")
+        elif is_direct:
             play_url = result["url"]
             self._console_log(f"Direct URL (no proxy): {play_url[:80]}...", "info")
         else:
@@ -2253,7 +2266,18 @@ class SynosWindow(Adw.ApplicationWindow):
 
             if result:
                 is_direct = result.get("direct", False)
-                if is_direct:
+                if result.get("local_file"):
+                    file_path = result["url"]
+                    file_dir = os.path.dirname(file_path)
+                    file_name = os.path.basename(file_path)
+                    dirs = list(self._audio_server._dirs)
+                    if file_dir not in dirs:
+                        dirs.append(file_dir)
+                        self._audio_server.set_dirs(dirs)
+                    dir_idx = dirs.index(file_dir)
+                    url = self._audio_server.file_url(dir_idx, file_name)
+                    is_direct = True
+                elif is_direct:
                     url = result["url"]
                 else:
                     proxy_id = register_proxy(

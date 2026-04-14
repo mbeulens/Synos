@@ -2,6 +2,7 @@
 
 import json
 import os
+import tempfile
 import threading
 
 from synos.streams import CONFIG_DIR
@@ -9,6 +10,7 @@ from synos.streams import CONFIG_DIR
 _PREFS_FILE = os.path.join(CONFIG_DIR, "ytmusic_prefs.json")
 _OAUTH_FILE = os.path.join(CONFIG_DIR, "ytmusic_oauth.json")
 _CREDENTIALS_FILE = os.path.join(CONFIG_DIR, "ytmusic_credentials.json")
+_DOWNLOAD_DIR = os.path.join(CONFIG_DIR, "ytcache")
 
 # Log callback
 _log = None
@@ -82,11 +84,7 @@ def is_oauth_authenticated():
 
 
 def setup_oauth(callback=None):
-    """Run the OAuth flow in a background thread.
-
-    Opens a browser for Google login. Saves token to disk.
-    callback(success: bool) is called on completion.
-    """
+    """Run the OAuth flow in a background thread."""
     _logmsg("YTMusic: Starting OAuth flow...", "info")
     _logmsg("A browser window will open for Google login", "info")
 
@@ -122,24 +120,19 @@ def setup_oauth(callback=None):
 
             webbrowser.open(url)
 
-            # Poll for token (no input() needed)
             _logmsg("Waiting for you to complete login in browser...", "info")
             deadline = time.time() + expires_in
             while time.time() < deadline:
                 time.sleep(interval)
                 try:
                     raw_token = credentials.token_from_code(device_code)
-                    # Check if response is an error
                     if isinstance(raw_token, dict) and "error" in raw_token:
                         error = raw_token["error"]
                         if error in ("authorization_pending", "slow_down"):
                             continue
                         else:
-                            _logmsg(f"YTMusic OAuth poll error: {error}", "error")
                             raise Exception(error)
-                    # Success — save token
                     os.makedirs(CONFIG_DIR, exist_ok=True)
-                    # Filter out unexpected keys
                     token_keys = {"access_token", "refresh_token", "token_type", "expires_in", "expires_at", "scope"}
                     clean_token = {k: v for k, v in raw_token.items() if k in token_keys}
                     ref_token = RefreshingToken(credentials=credentials, **clean_token)
@@ -169,21 +162,8 @@ def setup_oauth(callback=None):
     threading.Thread(target=_do_oauth, daemon=True).start()
 
 
-def _get_authenticated_yt():
-    """Get an authenticated YTMusic instance."""
-    from ytmusicapi import YTMusic, OAuthCredentials
-    if os.path.exists(_OAUTH_FILE):
-        client_id, client_secret = get_oauth_credentials()
-        oauth_creds = OAuthCredentials(client_id, client_secret)
-        return YTMusic(_OAUTH_FILE, oauth_credentials=oauth_creds)
-    return YTMusic()
-
-
 def search(query, limit=20):
-    """Search YouTube Music for songs.
-
-    Returns list of {title, artist, album, duration, video_id, thumbnail}.
-    """
+    """Search YouTube Music for songs."""
     _logmsg(f"YTMusic search: {query}", "info")
 
     try:
@@ -219,11 +199,7 @@ def search(query, limit=20):
 
 
 def get_playlists():
-    """Get user's YouTube Music playlists via yt-dlp with browser cookies.
-
-    Returns list of {title, playlist_id, count}.
-    Uses the Liked Music and saved playlists from YouTube.
-    """
+    """Get user's YouTube Music playlists via yt-dlp with browser cookies."""
     browser = get_browser()
     if not browser:
         _logmsg("YTMusic playlists: no browser configured", "error")
@@ -231,22 +207,16 @@ def get_playlists():
 
     _logmsg(f"YTMusic fetching playlists (browser: {browser})", "info")
 
-    # Return well-known playlists plus any we can discover
     playlists = [
         {"title": "Liked Music", "playlist_id": "LM", "count": 0},
     ]
 
-    # Try to get user's custom playlists via ytmusicapi (unauthenticated search won't work)
-    # For now, return the known playlists
     _logmsg(f"YTMusic returning {len(playlists)} playlists", "success")
     return playlists
 
 
 def get_playlist_tracks(playlist_id):
-    """Get tracks from a YouTube Music playlist via yt-dlp.
-
-    Returns list of {title, artist, video_id, duration, thumbnail}.
-    """
+    """Get tracks from a YouTube Music playlist via yt-dlp."""
     browser = get_browser()
     _logmsg(f"YTMusic playlist tracks: {playlist_id}", "info")
 
@@ -293,61 +263,50 @@ def get_playlist_tracks(playlist_id):
 
 
 def extract_audio_url(video_id):
-    """Extract the best audio URL from a YouTube video using yt-dlp.
+    """Download audio from YouTube and return local file path.
 
-    Returns {url, headers, content_type} or None.
+    Uses yt-dlp to download and convert to MP3.
+    Returns {url: file_path, direct: True, content_type: audio/mpeg} or None.
     """
-    _logmsg(f"YTMusic extracting audio: {video_id}", "info")
-    browser = get_browser()
+    _logmsg(f"YTMusic downloading audio: {video_id}", "info")
+
+    os.makedirs(_DOWNLOAD_DIR, exist_ok=True)
+    output_path = os.path.join(_DOWNLOAD_DIR, f"{video_id}.mp3")
+
+    # Return cached file if exists
+    if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+        _logmsg(f"YTMusic cache hit: {output_path}", "success")
+        return {"url": output_path, "direct": True, "content_type": "audio/mpeg", "local_file": True}
 
     try:
         import yt_dlp
 
-        # Don't use browser cookies for extraction — they cause signature
-        # solving failures. Public YouTube videos work without cookies.
         opts = {
             "format": "bestaudio/best",
             "quiet": True,
             "no_warnings": True,
+            "outtmpl": os.path.join(_DOWNLOAD_DIR, f"{video_id}.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }],
         }
 
-        urls_to_try = [
-            f"https://www.youtube.com/watch?v={video_id}",
-        ]
-        info = None
-        for try_url in urls_to_try:
-            try:
-                _logmsg(f"  Trying: {try_url}")
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(try_url, download=False)
-                if info:
-                    break
-            except Exception as e:
-                _logmsg(f"  Failed: {str(e)[:150]}", "error")
-                continue
+        yt_url = f"https://www.youtube.com/watch?v={video_id}"
+        _logmsg(f"  Downloading: {yt_url}")
 
-        if not info:
-            _logmsg("YTMusic: could not extract info from any URL", "error")
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([yt_url])
+
+        if os.path.exists(output_path):
+            size = os.path.getsize(output_path)
+            _logmsg(f"YTMusic downloaded: {output_path} ({size} bytes)", "success")
+            return {"url": output_path, "direct": True, "content_type": "audio/mpeg", "local_file": True}
+        else:
+            _logmsg(f"YTMusic: output file not found after download", "error")
             return None
-
-        url = info.get("url")
-        if not url:
-            formats = info.get("formats", [])
-            audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
-            if audio_fmts:
-                best = max(audio_fmts, key=lambda f: f.get("abr", 0) or 0)
-                url = best.get("url")
-
-        if not url:
-            _logmsg("YTMusic: no audio URL found", "error")
-            return None
-
-        headers = info.get("http_headers", {})
-        content_type = "audio/webm"
-
-        _logmsg(f"YTMusic audio extracted: {url[:80]}...", "success")
-        return {"url": url, "headers": headers, "content_type": content_type}
 
     except Exception as e:
-        _logmsg(f"YTMusic extract error: {e}", "error")
+        _logmsg(f"YTMusic download error: {e}", "error")
         return None
