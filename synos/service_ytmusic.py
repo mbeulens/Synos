@@ -92,23 +92,65 @@ def setup_oauth(callback=None):
 
     def _do_oauth():
         try:
+            import time
+            import webbrowser
+            from pathlib import Path
+            from ytmusicapi.auth.oauth.credentials import OAuthCredentials
+            from ytmusicapi.auth.oauth.token import RefreshingToken
+
             client_id, client_secret = get_oauth_credentials()
             if not client_id or not client_secret:
                 _logmsg("YTMusic OAuth: No credentials configured. Set them in Settings.", "error")
                 if callback:
                     callback(False)
                 return
-            from ytmusicapi import setup_oauth as yt_setup_oauth
-            os.makedirs(CONFIG_DIR, exist_ok=True)
-            yt_setup_oauth(
-                client_id=client_id,
-                client_secret=client_secret,
-                filepath=_OAUTH_FILE,
-                open_browser=True,
-            )
-            _logmsg("YTMusic OAuth: Authentication successful!", "success")
+
+            credentials = OAuthCredentials(client_id, client_secret)
+            code = credentials.get_code()
+            user_code = code["user_code"]
+            device_code = code["device_code"]
+            verification_url = code["verification_url"]
+            interval = code.get("interval", 5)
+            expires_in = code.get("expires_in", 1800)
+
+            url = f"{verification_url}?user_code={user_code}"
+
+            _logmsg(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+            _logmsg(f"Your code: {user_code}", "success")
+            _logmsg(f"Enter this code at: {verification_url}", "info")
+            _logmsg(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+
+            webbrowser.open(url)
+
+            # Poll for token (no input() needed)
+            _logmsg("Waiting for you to complete login in browser...", "info")
+            deadline = time.time() + expires_in
+            while time.time() < deadline:
+                time.sleep(interval)
+                try:
+                    raw_token = credentials.token_from_code(device_code)
+                    # Success — save token
+                    os.makedirs(CONFIG_DIR, exist_ok=True)
+                    ref_token = RefreshingToken(credentials=credentials, **raw_token)
+                    ref_token.update(ref_token.as_dict())
+                    ref_token.local_cache = Path(_OAUTH_FILE)
+                    # Force save
+                    ref_token.store_token()
+                    _logmsg("YTMusic OAuth: Authentication successful!", "success")
+                    if callback:
+                        callback(True)
+                    return
+                except Exception as poll_err:
+                    err_str = str(poll_err).lower()
+                    if "authorization_pending" in err_str or "slow_down" in err_str:
+                        continue
+                    else:
+                        raise
+
+            _logmsg("YTMusic OAuth: Timed out waiting for login", "error")
             if callback:
-                callback(True)
+                callback(False)
+
         except Exception as e:
             _logmsg(f"YTMusic OAuth error: {e}", "error")
             if callback:
