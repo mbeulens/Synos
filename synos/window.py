@@ -1104,10 +1104,10 @@ class SynosWindow(Adw.ApplicationWindow):
         self._browser_add_btn.set_visible(False)
         self._disconnect_browser_signals()
 
-        if not service_ytmusic.is_oauth_authenticated():
+        if not service_ytmusic.get_browser():
             row = self._make_browser_row(
                 "dialog-warning-symbolic",
-                "Connect YouTube Music in Settings first",
+                "Set browser in Settings first",
                 activatable=False,
             )
             self._browser_list.append(row)
