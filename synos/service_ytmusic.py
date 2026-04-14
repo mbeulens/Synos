@@ -304,7 +304,7 @@ def extract_audio_url(video_id):
         import yt_dlp
 
         opts = {
-            "format": "bestaudio/bestvideo+bestaudio/best",
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
             "quiet": True,
             "no_warnings": True,
         }
