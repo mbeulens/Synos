@@ -1,22 +1,32 @@
 # Changelog
 
+## v1.6.0 — Minor release
+
+### New Features
+- **Keyboard Shortcuts** — Space: play/pause, F12: toggle console, Arrow Up/Down: volume +/- 2
+
+### Improvements
+- Album art smart retry increased to 5 attempts with artist variants and no-artist fallback
+- Skip album art lookup for Sonos internal states (ZPSTR_BUFFERING, etc.)
+- Updated screenshot with album art
+
 ## v1.5.0 — Minor release
 
 ### New Features
 - **Album Art** — Fetches cover art from MusicBrainz + Cover Art Archive
   - Background thread fetch, UI stays responsive
   - Persistent disk cache in `~/.config/synos/artcache/`
-  - Smart retry: tries up to 3 cleaned title variants (strips track numbers, artist prefix, mix tags)
+  - Smart retry: tries up to 5 cleaned title/artist variants
   - Resets to disc icon immediately on track change
 - **Console Log** — Collapsible log window at the bottom of the app
-  - Toggle via terminal icon in headerbar
+  - Toggle via terminal icon in headerbar or F12
   - Logs speaker discovery, playback, streams, album art, EQ, seek, auto-advance
   - Timestamped, color-coded (info/success/error), max 500 lines, newest first
   - Clear and close buttons in console header
-  - Detailed album art logging: cache hits/misses, MusicBrainz queries, CAA requests, URLs
+  - Detailed album art logging: cache hits/misses, MusicBrainz queries, CAA requests
 
 ### UI Changes
-- Theme and console toggle buttons moved to left side of headerbar (after transport controls)
+- Theme and console toggle buttons moved to left side of headerbar
 
 ## v1.2.0 — Minor release
 
@@ -57,7 +67,7 @@
 - Responsive slider and controls even with large files
 
 ### VU Meter
-- Refined random bar patterns (no more ocean wave effect)
+- Refined random bar patterns
 - Fixed height at 100px, pinned to bottom of center pane
 
 ### Previous features (v0.3.0)

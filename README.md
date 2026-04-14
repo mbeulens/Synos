@@ -22,6 +22,7 @@ A GTK4 + Libadwaita Sonos controller for Linux.
 - **Light/Dark Mode** — Toggle with persistent preference
 - **Transport Controls** — Play, pause, prev, next, volume, mute from the headerbar
 - **Non-blocking UI** — All playback and network calls run in background threads
+- **Keyboard Shortcuts** — Space (play/pause), F12 (console), Arrow Up/Down (volume)
 
 ## Supported Audio Formats
 
